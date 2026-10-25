@@ -625,7 +625,7 @@ mod home {
         /// This function returns the URI for the icon image asset of the `AppletWithIconButton`.
         fn icon_as_uri(&self) -> String {
             let bytes = match *self {
-                Self::NoteRecognition => include_bytes!("../assets/note_recognition_icon.png"),
+                Self::NoteRecognition => include_bytes!("note_recognition_icon.png"),
             };
             let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
             format!("data:image/png;base64,{encoded}")
