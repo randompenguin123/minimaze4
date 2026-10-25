@@ -825,10 +825,13 @@ mod note_recognition {
                         </div>
                         <NoteFlashcard />
                         {move || {
-                            clone_list.with(|clone_list| clone_list
-                                .iter()
-                                .map(|(_, note_button_clone)| note_button_clone.view())
-                                .collect_view())
+                            clone_list
+                                .with(|clone_list| {
+                                    clone_list
+                                        .iter()
+                                        .map(|(_, note_button_clone)| note_button_clone.view())
+                                        .collect_view()
+                                })
                         }}
                     </super::Center>
                 </div>
