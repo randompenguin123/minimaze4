@@ -1,0 +1,101 @@
+[package]
+name = "minimaze4"
+version = "0.1.0"
+edition = "2024"
+repository = "https://github.com/randompenguin123/minimaze_dist_trunk"
+readme = "README.md"
+license = "None"
+description = "A simple front-end web app written in Leptos"
+keywords = ["minimaze", "minimaze4", "web", "app", "website", "google apps script"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+base64 = "0.23.1"
+console_error_panic_hook = "0.1.7"
+js-sys = "0.3.106"
+leptos-use-window-size = "0.20.1"
+slab = "0.4.12"
+strum = "0.28.0"
+strum_macros = "0.28.0"
+wasm-bindgen = "0.2.129"
+
+[dependencies.web-sys]
+version = "0.3.106"
+features = ["Window", "Navigator", "MediaQueryList", "DomRect"]
+
+[dependencies.leptos]
+version = "0.8"
+features = ["csr"]
+
+[profile.release]
+opt-level = 'z'
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[lints.clippy]
+# Lint groups
+perf = "warn"
+style = "warn"
+nursery = "warn"
+pedantic = "warn"
+complexity = "warn"
+suspicious = "warn"
+correctness = "warn"
+# Individual lints
+try_err = "warn"
+rc_mutex = "warn"
+rc_buffer = "warn"
+empty_drop = "warn"
+get_unwrap = "warn"
+mem_forget = "warn"
+mutex_atomic = "warn"
+mutex_integer = "warn"
+str_to_string = "warn"
+return_and_then = "warn"
+allow_attributes = "warn"
+clone_on_ref_ptr = "warn"
+deref_by_slicing = "warn"
+error_impl_error = "warn"
+filetype_is_file = "warn"
+unused_result_ok = "warn"
+unused_trait_names = "warn"
+verbose_file_reads = "warn"
+lossy_float_literal = "warn"
+std_instead_of_core = "warn"
+needless_raw_strings = "warn"
+std_instead_of_alloc = "warn"
+string_lit_chars_any = "warn"
+alloc_instead_of_core = "warn"
+if_then_some_else_none = "warn"
+pathbuf_init_then_push = "warn"
+renamed_function_params = "warn"
+default_numeric_fallback = "warn"
+redundant_type_annotations = "warn"
+unseparated_literal_suffix = "warn"
+assertions_on_result_states = "warn"
+empty_structs_with_brackets = "warn"
+multiple_unsafe_ops_per_block = "warn"
+decimal_literal_representation = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+empty_enum_variants_with_brackets = "warn"
+map_with_unused_argument_over_ranges = "warn"
+# Documentation
+empty_docs = "warn"
+doc_markdown = "warn"
+doc_link_code = "warn"
+doc_broken_link = "warn"
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
+doc_link_with_quotes = "warn"
+doc_lazy_continuation = "warn"
+unnecessary_safety_doc = "warn"
+doc_suspicious_footnotes = "warn"
+doc_overindented_list_items = "warn"
+empty_line_after_doc_comments = "warn"
+missing_docs_in_private_items = "warn"
+doc_comment_double_space_linebreaks = "warn"
