@@ -12,6 +12,14 @@ const VERSION: &str = env!("BUILD_VERSION");
 /// A `OnceLock` that stores whether the current device is touch-screen.
 static IS_TOUCHSCREEN: OnceLock<bool> = OnceLock::new();
 
+/// The CSS style string.
+const STYLE: &str = "
+*, *::before, *::after {
+    font-family: monospace;
+    transition: all 0.3s ease;
+}
+";
+
 #[wasm_bindgen(start)]
 fn main() {
     APPLET.set_applet(AppletView::Home);
@@ -19,14 +27,7 @@ fn main() {
     IS_TOUCHSCREEN.set(is_touchscreen()).unwrap();
     leptos::mount::mount_to_body(move || {
         view! {
-            <style>
-                "
-                *, *::before, *::after {
-                    font-family: monospace;
-                    transition: all 0.3s ease;
-                }
-                "
-            </style>
+            <style>{STYLE}</style>
             <main>
                 <home::App />
             </main>
@@ -41,14 +42,14 @@ fn is_touchscreen() -> bool {
     };
     let navigator = window.navigator();
     if navigator.max_touch_points() > 0_i32 {
-        return true;
-    }
-    if let Ok(Some(media_match)) = window.match_media("(any-pointer: coarse)")
+        true
+    } else if let Ok(Some(media_match)) = window.match_media("(any-pointer: coarse)")
         && media_match.matches()
     {
-        return true;
+        true
+    } else {
+        false
     }
-    false
 }
 
 #[component]
@@ -323,43 +324,56 @@ mod handler {
         fn add_handle(&self, handle: AppletHandle);
 
         /// Adds a new signal to be handled and dropped.
-        fn add_new_signal<T>(&self, signal: (ReadSignal<T>, WriteSignal<T>))
-        where
-            T: 'static;
+        fn add_new_signal<T: 'static>(&self, signal: (ReadSignal<T>, WriteSignal<T>));
 
         /// Creates a `(ReadSignal<T>, WriteSignal<T>)` and adds both of them to the handle list.
-        fn add_signal<T>(&self, value: T) -> (ReadSignal<T>, WriteSignal<T>)
-        where
-            T: Send + Sync + 'static,
-        {
+        fn add_signal<T: Send + Sync + 'static>(
+            &self,
+            value: T,
+        ) -> (ReadSignal<T>, WriteSignal<T>) {
             let value = signal(value);
             self.add_new_signal(value);
             value
         }
 
         /// Creates a `window_event_listener`, then disposes of the event listener once it is called.
-        fn add_listener_once<T>(&self, event: T, cb: impl Fn(T::EventType) + 'static)
-        where
-            T: EventDescriptor + 'static,
+        fn add_listener_once<T: EventDescriptor + 'static, U: Fn(T::EventType) + 'static>(
+            &self,
+            event: T,
+            cb: U,
+        ) where
             T::EventType: JsCast,
         {
             let (handle, set_handle) = self.add_signal(None::<ListenerHandle>);
             set_handle.set(Some(self.add_listener(event, move |event_object| {
-                cb(event_object);
-                set_handle.update(|handle| {
-                    if let Some(handle) = handle.take() {
-                        AppletHandle::Window(handle).rid();
-                    }
-                });
-                handle.dispose();
-                set_handle.dispose();
+                Self::call_function_and_remove_handles(&cb, event_object, handle, set_handle);
             })));
         }
 
+        /// Calls `cb` with the event object `event_object`, and removes `handle`, `set_handle`, and the `ListenerHandle` they point to after.
+        fn call_function_and_remove_handles<T: Fn(U) + 'static, U: JsCast>(
+            cb: &T,
+            event_object: U,
+            handle: ReadSignal<Option<ListenerHandle>>,
+            set_handle: WriteSignal<Option<ListenerHandle>>,
+        ) {
+            cb(event_object);
+            set_handle.update(|handle| {
+                if let Some(handle) = handle.take() {
+                    AppletHandle::Window(handle).rid();
+                }
+            });
+            handle.dispose();
+            set_handle.dispose();
+        }
+
         /// Creates a `window_event_listener()` call and returns a `ListenerHandle`.
-        fn add_listener<T>(&self, event: T, cb: impl Fn(T::EventType) + 'static) -> ListenerHandle
+        fn add_listener<T: EventDescriptor + 'static>(
+            &self,
+            event: T,
+            cb: impl Fn(T::EventType) + 'static,
+        ) -> ListenerHandle
         where
-            T: EventDescriptor + 'static,
             T::EventType: JsCast,
         {
             let handle = ListenerHandle::new(window_event_listener::<T>(event, cb));
@@ -368,13 +382,11 @@ mod handler {
         }
 
         /// Creates an `Effect::watch` effect handled by the handler.
-        fn add_effect<T>(
+        fn add_effect<T: 'static>(
             &self,
             dependency_fn: impl FnMut() -> T + 'static,
             mut handler: impl FnMut(&T, Option<&T>) + 'static,
-        ) where
-            T: 'static,
-        {
+        ) {
             self.add_handle(AppletHandle::Effect(Effect::watch(
                 dependency_fn,
                 move |current, previous, _| handler(current, previous),
@@ -444,6 +456,20 @@ mod handler {
         set_current_applet: WriteSignal<AppletView>,
     }
 
+    impl AppletHandler {
+        /// Creates a new `AppletHandler` with the given `applet_view`.
+        fn new(applet_view: AppletView) -> Self {
+            let (current_applet, set_current_applet) = signal(applet_view);
+            Self {
+                handles: Vec::new(),
+                new_signals: Vec::new(),
+                old_signals: Vec::new(),
+                current_applet,
+                set_current_applet,
+            }
+        }
+    }
+
     /// A `Mutex` to an `Option` of an `Arc` to a `Mutex` to an `FnMut` that takes an `f64`. This is how the animation function that runs every frame is stored.
     type F64FnMutMutexArcOptionMutex = Mutex<Option<Arc<Mutex<dyn FnMut(f64) + Send>>>>;
 
@@ -465,9 +491,14 @@ mod handler {
             self.inner.lock().unwrap().as_ref().unwrap().current_applet
         }
 
-        /// If the `StaticAppletHandler` is uninitializes, it is initialized starting from `applet_view`. Otherwise, the current applet is set to `applet_view`, and all handles are cleared.
+        /// If the `StaticAppletHandler` is uninitialized, it is initialized starting from `applet_view`. Otherwise, the current applet is set to `applet_view`, and all handles are cleared.
         pub fn set_applet(&self, applet_view: AppletView) {
             *self.each_frame.lock().unwrap() = None;
+            self.reset_inner_handler(applet_view);
+        }
+
+        /// Resets the inner `AppletHandler` if it has been initialized, and constructs it otherwise using `applet_view`.
+        fn reset_inner_handler(&self, applet_view: AppletView) {
             let mut handler = self.inner.lock().unwrap();
             if let Some(handler) = handler.as_mut() {
                 handler.set_current_applet.set(applet_view);
@@ -481,36 +512,49 @@ mod handler {
                     signal_handle.rid();
                 }
             } else {
-                let (current_applet, set_current_applet) = signal(applet_view);
-                *handler = Some(AppletHandler {
-                    handles: Vec::new(),
-                    new_signals: Vec::new(),
-                    old_signals: Vec::new(),
-                    current_applet,
-                    set_current_applet,
-                });
+                *handler = Some(AppletHandler::new(applet_view));
             }
         }
 
         /// Starts the animation loop.
-        pub fn animate(&'static self, each_frame: impl FnMut(f64) + Send + 'static) {
+        pub fn animate<T: FnMut(f64) + Send + 'static>(&'static self, each_frame: T) {
             *self.each_frame.lock().unwrap() = Some(Arc::new(Mutex::new(each_frame)));
-            let closure = Rc::new(RefCell::new(None::<Closure<dyn FnMut(f64)>>));
-            let clone = Rc::clone(&closure);
-            *clone.borrow_mut() = Some(Closure::new(move |time| {
-                if let Some(ref arc) = *self.each_frame.lock().unwrap() {
-                    Arc::clone(arc).lock().unwrap()(time);
-                    web_sys::window()
-                        .unwrap()
-                        .request_animation_frame(
-                            closure.borrow().as_ref().unwrap().as_ref().unchecked_ref(),
-                        )
-                        .unwrap();
-                }
+            let [closure, clone] = TimeClosure::new_two();
+            *clone.0.borrow_mut() = Some(Closure::new(move |time| {
+                self.animate_frame_and_request(&closure, time);
             }));
+            clone.call();
+        }
+
+        /// Animates the frame using `time`, and then calles the `&TimeClosure` to animate the next frame.
+        fn animate_frame_and_request(&self, closure: &TimeClosure, time: f64) {
+            if let Some(ref arc) = *self.each_frame.lock().unwrap() {
+                Arc::clone(arc).lock().unwrap()(time);
+                closure.call();
+            }
+        }
+    }
+
+    /// An `Rc` to a `RefCell` to an `Option` to a `Closure` containing a `dyn FnMut(f64)`.
+    type F64FnMutClosureOptionRefCellRc = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
+
+    /// An `Rc` to a closure that calls a frame-by-frame animation function and requests another animation frame for itself.
+    #[derive(Clone)]
+    struct TimeClosure(F64FnMutClosureOptionRefCellRc);
+
+    impl TimeClosure {
+        /// Creates two `TimeClosure`s, one of which is the clone of the other.
+        fn new_two() -> [Self; 2] {
+            let closure = Self(Rc::new(RefCell::new(None::<Closure<dyn FnMut(f64)>>)));
+            let clone = closure.clone();
+            [closure, clone]
+        }
+
+        /// Calls the `TimeClosure`.
+        fn call(&self) {
             web_sys::window()
                 .unwrap()
-                .request_animation_frame(clone.borrow().as_ref().unwrap().as_ref().unchecked_ref())
+                .request_animation_frame(self.0.borrow().as_ref().unwrap().as_ref().unchecked_ref())
                 .unwrap();
         }
     }
@@ -526,10 +570,7 @@ mod handler {
                 .push(handle);
         }
 
-        fn add_new_signal<T>(&self, signal: (ReadSignal<T>, WriteSignal<T>))
-        where
-            T: 'static,
-        {
+        fn add_new_signal<T: 'static>(&self, signal: (ReadSignal<T>, WriteSignal<T>)) {
             self.inner
                 .lock()
                 .unwrap()
@@ -763,48 +804,14 @@ mod note_recognition {
     use leptos::html::Button;
     use leptos::prelude::*;
     use leptos::tachys::html::attribute::Attribute;
+    use leptos::tachys::html::event::KeyboardEvent;
     use slab::Slab;
     use std::sync::Mutex;
 
     #[component]
     pub fn App() -> impl IntoView {
         let (clone_list, set_clone_list) = APPLET.add_signal(Slab::<NoteButtonClone>::new());
-        APPLET.animate(move |time| {
-            let vec = Mutex::new(Vec::new());
-            clone_list.with_untracked(|clone_list| {
-                *vec.lock().unwrap() = clone_list
-                    .iter()
-                    .filter(move |(_, note_button_clone)| {
-                        let start_time = note_button_clone
-                            .start_time
-                            .get_untracked()
-                            .unwrap_or_else(|| {
-                                note_button_clone.set_start_time.set(Some(time));
-                                time
-                            });
-                        let elapsed_time = time - start_time;
-                        let window_size = leptos_use_window_size::use_window_size();
-                        let window_size = (
-                            window_size.width.get_untracked(),
-                            window_size.height.get_untracked(),
-                        );
-                        let new_coordinates = (
-                            note_button_clone.start_coordinates.0,
-                            elapsed_time.mul_add(1_f64, note_button_clone.start_coordinates.1),
-                        );
-                        note_button_clone.set_coordinates.set(new_coordinates);
-                        !((-window_size.0..window_size.0 * 2_f64).contains(&new_coordinates.0)
-                            && (-window_size.1..window_size.1 * 2_f64).contains(&new_coordinates.1))
-                    })
-                    .map(|(key, _)| key)
-                    .collect::<Vec<_>>();
-            });
-            set_clone_list.update(|clone_list| {
-                for key in vec.lock().unwrap().iter() {
-                    clone_list.try_remove(*key);
-                }
-            });
-        });
+        APPLET.animate(move |time| animate_clones(clone_list, set_clone_list, time));
         view! {
             <div style:overflow="hidden" {..super::absolute_position()}>
                 <div
@@ -837,6 +844,32 @@ mod note_recognition {
                 </div>
             </div>
         }
+    }
+
+    /// Animates all of the clones using the `time`.
+    fn animate_clones(
+        clone_list: ReadSignal<Slab<NoteButtonClone>>,
+        set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
+        time: f64,
+    ) {
+        let vec = Mutex::new(Vec::new());
+        clone_list.with_untracked(|clone_list| {
+            *vec.lock().unwrap() = clone_list
+                .iter()
+                .filter(move |(_, note_button_clone)| note_button_clone.animate(time))
+                .map(|(key, _)| key)
+                .collect();
+        });
+        remove_selected_clones(&vec.lock().unwrap(), set_clone_list);
+    }
+
+    /// Removes the selected clones, whose keys are stored in an `&[usize]`, from a `Slab<NoteButtonClone>`.
+    fn remove_selected_clones(slice: &[usize], set_clone_list: WriteSignal<Slab<NoteButtonClone>>) {
+        set_clone_list.update(|clone_list| {
+            for key in slice {
+                clone_list.try_remove(*key);
+            }
+        });
     }
 
     #[component]
@@ -979,51 +1012,110 @@ mod note_recognition {
                 set_coordinates,
             }
         }
+
+        /// Animates the `NoteButtonClone` using the current `time` as an `f64`.
+        fn animate(&self, time: f64) -> bool {
+            let window_size = leptos_use_window_size::use_window_size();
+            let window_size = (
+                window_size.width.get_untracked(),
+                window_size.height.get_untracked(),
+            );
+            let new_coordinates = (
+                self.start_coordinates.0,
+                self.get_elapsed_time(time)
+                    .mul_add(1_f64, self.start_coordinates.1),
+            );
+            self.set_coordinates.set(new_coordinates);
+            !((-window_size.0..window_size.0 * 2_f64).contains(&new_coordinates.0)
+                && (-window_size.1..window_size.1 * 2_f64).contains(&new_coordinates.1))
+        }
+
+        /// Gets the current elapsed time using the `current_time` as an `f64`. This function takes into account `self`'s `set_start_time` field.
+        fn get_elapsed_time(&self, current_time: f64) -> f64 {
+            self.start_time.get_untracked().map_or_else(
+                || {
+                    self.set_start_time.set(Some(current_time));
+                    0_f64
+                },
+                |start_time| current_time - start_time,
+            )
+        }
     }
+
+    /// The trigger keys that cause `NoteButtons` to be pressed.
+    const TRIGGERS: [[&str; 7]; 3] = [
+        ["KeyA", "KeyB", "KeyC", "KeyD", "KeyE", "KeyF", "KeyG"],
+        [
+            "Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7",
+        ],
+        [
+            "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7",
+        ],
+    ];
+    /// The letters shown on the note buttons.
+    const LETTERS: [char; 7] = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    /// The subscript numbers shown on the note buttons.
+    const NUMBERS: [char; 7] = [
+        '\u{2081}', '\u{2082}', '\u{2083}', '\u{2084}', '\u{2085}', '\u{2086}', '\u{2087}',
+    ];
 
     /// This function converts the input, a `u8` from 0 to 6, into a clickable note button using a `WriteSignal` to a list of `NoteButtonClone`s.
     fn into_note_button(
         note: u8,
         set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
     ) -> impl IntoView {
-        const TRIGGERS: [[&str; 7]; 3] = [
-            ["KeyA", "KeyB", "KeyC", "KeyD", "KeyE", "KeyF", "KeyG"],
-            [
-                "Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7",
-            ],
-            [
-                "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7",
-            ],
-        ];
-
         let target_ref = NodeRef::new();
         let (attribute, interaction) = interact::interactive(move || {
             add_clone(note, set_clone_list, target_ref);
         });
+        add_triggers_to_interaction(note, interaction.set_is_active);
+        view! { <NoteButton note attribute target_ref /> }
+    }
+
+    /// Triggers `set_is_active` when the `TRIGGERS` are triggered.
+    fn add_triggers_to_interaction(note: u8, set_is_active: WriteSignal<bool>) {
         let (triggered, set_triggered) = APPLET.add_signal([false; TRIGGERS.len()]);
         APPLET.add_listener(ev::keypress, move |keyboard_event| {
-            for (i, trigger) in TRIGGERS.into_iter().enumerate() {
-                if keyboard_event.code() == trigger[note as usize] {
-                    set_triggered.update(|triggers| triggers[i] = true);
-                    break;
-                }
-            }
-            if triggered.get().into_iter().any(|boolean| boolean) {
-                interaction.set_is_active.set(true);
-            }
+            key_triggered::<true>(
+                note,
+                &keyboard_event,
+                triggered,
+                set_triggered,
+                set_is_active,
+            );
         });
         APPLET.add_listener(ev::keyup, move |keyboard_event| {
-            for (i, trigger) in TRIGGERS.into_iter().enumerate() {
-                if keyboard_event.code() == trigger[note as usize] {
-                    set_triggered.update(|triggers| triggers[i] = false);
-                    break;
-                }
-            }
-            if triggered.get().into_iter().all(|boolean| !boolean) {
-                interaction.set_is_active.set(false);
-            }
+            key_triggered::<false>(
+                note,
+                &keyboard_event,
+                triggered,
+                set_triggered,
+                set_is_active,
+            );
         });
-        view! { <NoteButton note attribute target_ref /> }
+    }
+
+    /// This function is called when a key is pressed.
+    fn key_triggered<const IS_KEYPRESS: bool>(
+        note: u8,
+        keyboard_event: &KeyboardEvent,
+        triggered: ReadSignal<[bool; TRIGGERS.len()]>,
+        set_triggered: WriteSignal<[bool; TRIGGERS.len()]>,
+        set_is_active: WriteSignal<bool>,
+    ) {
+        for (i, trigger) in TRIGGERS.into_iter().enumerate() {
+            if keyboard_event.code() == trigger[note as usize] {
+                set_triggered.update(|triggers| triggers[i] = IS_KEYPRESS);
+                break;
+            }
+        }
+        if triggered
+            .get()
+            .into_iter()
+            .any(|boolean| boolean == IS_KEYPRESS)
+        {
+            set_is_active.set(IS_KEYPRESS);
+        }
     }
 
     /// This function adds a `NoteButtonClone` for `note` to a list of `NoteButtonClone`s.
@@ -1049,11 +1141,6 @@ mod note_recognition {
         #[prop(optional)]
         coordinates: Option<ReadSignal<(f64, f64)>>,
     ) -> impl IntoView {
-        const LETTERS: [char; 7] = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-        const NUMBERS: [char; 7] = [
-            '\u{2081}', '\u{2082}', '\u{2083}', '\u{2084}', '\u{2085}', '\u{2086}', '\u{2087}',
-        ];
-
         let letter = *LETTERS.get(note as usize).unwrap_or(&'0');
         let number = *NUMBERS.get(note as usize).unwrap_or(&'\u{2080}');
         let letter_number = [letter, number].iter().collect::<String>();
