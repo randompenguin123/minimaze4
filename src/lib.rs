@@ -1,7 +1,9 @@
+use derive_more::{Add, AddAssign};
 use handler::APPLET;
 use home::AppletView;
 use leptos::prelude::*;
 use leptos::tachys::html::attribute::Attribute;
+use leptos::tachys::renderer::dom::Element;
 use std::sync::OnceLock;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlElement;
@@ -86,21 +88,51 @@ fn absolute_position() -> impl Attribute {
     }
 }
 
+/// A pair of two-dimensional coordinates.
+///
+/// | coordinate | letter | increment effect | decrement effect |
+/// | ---------- | :----: | ---------------- | ---------------- |
+/// | first      | x      | move right       | move left        |
+/// | second     | y      | move down        | move up          |
+#[derive(Add, AddAssign, Clone, Default)]
+struct Coordinates(f64, f64);
+
+impl Coordinates {
+    /// Calculates the offset vector of an `&HtmlElement`.
+    fn of_offset(element: &HtmlElement) -> Self {
+        Self(
+            f64::from(element.offset_left()),
+            f64::from(element.offset_top()),
+        )
+    }
+
+    /// Calculates the scroll offset vector of an `&Element`.
+    fn of_scroll(element: &Element) -> Self {
+        Self(
+            f64::from(element.scroll_left()),
+            f64::from(element.scroll_top()),
+        )
+    }
+
+    /// Calculates the total offset of an `&HtmlElement`, combining normal offset and its parent's scroll offset.
+    fn element_offset(element: &HtmlElement) -> Self {
+        Self::of_offset(element)
+            + element
+                .parent_element()
+                .map(|parent| Self::of_scroll(&parent))
+                .unwrap_or_default()
+    }
+}
+
 /// Gets the position of a `&HtmlElement` without considering `style:transform` attributes.
-fn get_position_untransformed(element: &HtmlElement) -> (f64, f64) {
-    let mut x = 0_f64;
-    let mut y = 0_f64;
+fn get_position_untransformed(element: &HtmlElement) -> Coordinates {
+    let mut coordinates = Coordinates::default();
     let mut current = Some(element.clone());
     while let Some(other_element) = current {
-        x += f64::from(other_element.offset_left());
-        y += f64::from(other_element.offset_top());
-        if let Some(parent) = other_element.parent_element() {
-            x -= f64::from(parent.scroll_left());
-            x -= f64::from(parent.scroll_top());
-        }
-        current = other_element.offset_parent().map(JsCast::unchecked_into);
+        coordinates += Coordinates::element_offset(&other_element);
+        current = other_element.offset_parent().map(Element::unchecked_into);
     }
-    (x, y)
+    coordinates
 }
 
 /// A module of utilities for interacting with elements through the pointer.
@@ -138,89 +170,35 @@ mod interact {
         },
     }
 
+    /// Creates three `(ReadSignal<bool>, WriteSignal<bool>)`s initialized as `false`.
+    fn get_three_signals<T: Handler>(handler: &T) -> [(ReadSignal<bool>, WriteSignal<bool>); 3] {
+        [
+            handler.add_signal(false),
+            handler.add_signal(false),
+            handler.add_signal(false),
+        ]
+    }
+
     /// This function creates and returns an `impl Attribute` and an `Interaction` object. It provides `ReadSignal`s for when a HTML element is hovered over, active, or disabled. It also changes the cursor accordingly:
     ///
     /// | interaction | cursor      |
     /// | :---------: | :---------: |
     /// | hover       | pointer     |
     /// | disabled    | not-allowed |
-    pub fn interaction(
-        handler: &'static impl Handler,
-        mut on_click: impl FnMut() + 'static,
+    pub fn interaction<T: Handler, U: FnMut() + 'static>(
+        handler: &'static T,
+        on_click: U,
     ) -> (impl Attribute, Interaction) {
-        let (is_hovered, set_is_hovered) = handler.add_signal(false);
-        let (is_active, set_is_active) = handler.add_signal(false);
-        let (is_disabled, set_is_disabled) = handler.add_signal(false);
-        let mut new_on_click = if IS_TOUCHSCREEN.get() == Some(&false) {
-            handler.add_effect(
-                move || is_active.get(),
-                move |current, previous| {
-                    if !current && previous != Some(&false) {
-                        on_click();
-                    }
-                },
-            );
-            None
-        } else {
-            Some(on_click)
-        };
-        let clicked = move || {
-            set_is_active.set(true);
-            handler.add_listener_once(ev::mouseup, move |_| set_is_active.set(false));
-            handler.add_listener_once(ev::pointerup, move |_| set_is_active.set(false));
-            handler.add_listener_once(ev::pointercancel, move |_| {
-                set_is_active.set(false);
-                set_is_hovered.set(false);
-            });
-            handler.add_listener_once(ev::touchend, move |_| {
-                set_is_active.set(false);
-                set_is_hovered.set(false);
-            });
-            handler.add_listener_once(ev::touchcancel, move |_| {
-                set_is_active.set(false);
-                set_is_hovered.set(false);
-            });
-        };
+        let [
+            (is_hovered, set_is_hovered),
+            (is_active, set_is_active),
+            (is_disabled, set_is_disabled),
+        ] = get_three_signals(handler);
+        let on_click_event = get_on_click_event(handler, is_active, on_click);
         (
             view! {
                 <{..}
-                    on:mouseup=move |_| set_is_active.set(false)
-                    on:mousedown=move |_| {
-                        if IS_TOUCHSCREEN.get() == Some(&false) {
-                            clicked();
-                        }
-                    }
-                    on:mouseenter=move |_| set_is_hovered.set(true)
-                    on:mouseleave=move |_| set_is_hovered.set(false)
-                    on:pointerup=move |_| set_is_active.set(false)
-                    on:pointerdown=move |_| clicked()
-                    on:pointerenter=move |_| set_is_hovered.set(true)
-                    on:pointerleave=move |_| set_is_hovered.set(false)
-                    on:pointercancel=move |_| {
-                        set_is_active.set(false);
-                        set_is_hovered.set(false);
-                    }
-                    on:touchend=move |_| {
-                        set_is_active.set(false);
-                        set_is_hovered.set(false);
-                    }
-                    on:touchstart=move |_| {
-                        set_is_hovered.set(true);
-                        clicked();
-                    }
-                    on:touchcancel=move |_| {
-                        set_is_active.set(false);
-                        set_is_hovered.set(false);
-                    }
-                    on:click=move |_| {
-                        if IS_TOUCHSCREEN.get() == Some(&true) {
-                            set_is_active.set(false);
-                            set_is_hovered.set(false);
-                            if let Some(ref mut on_click) = new_on_click {
-                                on_click();
-                            }
-                        }
-                    }
+                    {..bare_interaction(set_is_hovered, set_is_active, on_click_event)}
                     style:cursor=move || {
                         if !is_hovered.get() {
                             "auto"
@@ -247,6 +225,152 @@ mod interact {
                 set_is_disabled,
             },
         )
+    }
+
+    /// If the device is touchscreen, this function returns `Some(on_click)`. Otherwise, it returns `None`, but it adds an effect to `handler` that calls `on_click()` whenever `is_active` changes from `true` to `false`.
+    pub fn get_on_click_event<T: Handler, U: FnMut() + 'static>(
+        handler: &T,
+        is_active: ReadSignal<bool>,
+        mut on_click: U,
+    ) -> Option<U> {
+        if IS_TOUCHSCREEN.get() == Some(&false) {
+            handler.add_effect(
+                move || is_active.get(),
+                move |current, previous| {
+                    if !current && previous != Some(&false) {
+                        on_click();
+                    }
+                },
+            );
+            None
+        } else {
+            Some(on_click)
+        }
+    }
+
+    /// This macro contains a combination of different utilities to make adding window event listeners easier.
+    macro_rules! listen {
+        ($set_is_hovered:ident, $set_is_active:ident, $clicked:ident: active) => {
+            $set_is_active.set(true)
+        };
+        ($set_is_hovered:ident, $set_is_active:ident, $clicked:ident: not_active) => {
+            $set_is_active.set(false)
+        };
+        ($set_is_hovered:ident, $set_is_active:ident, $clicked:ident: hover) => {
+            $set_is_hovered.set(true)
+        };
+        ($set_is_hovered:ident, $set_is_active:ident, $clicked:ident: not_hovered) => {
+            $set_is_hovered.set(false)
+        };
+        ($set_is_hovered:ident, $set_is_active:ident, $clicked:ident: deactivate) => {
+            listen!($set_is_hovered, $set_is_active, $clicked: not_hovered);
+            listen!($set_is_hovered, $set_is_active, $clicked: not_active)
+        };
+        ($set_is_hovered:ident, $set_is_active:ident, $clicked:ident: click) => {
+            $clicked()
+        };
+        ($set_is_hovered:ident, $set_is_active:ident, $clicked:ident: hover_and_click) => {
+            listen!($set_is_hovered, $set_is_active, $clicked: hover);
+            listen!($set_is_hovered, $set_is_active, $clicked: click)
+        };
+        ($set_is_hovered:ident, $set_is_active:ident, $clicked:ident: click_if_not_touchscreen) => {
+            if IS_TOUCHSCREEN.get() == Some(&false) {
+                listen!($set_is_hovered, $set_is_active, $clicked: click);
+            }
+        };
+        {
+            $set_is_hovered:ident
+            $set_is_active:ident
+            $clicked:ident
+            $($x:ident -> $flag:ident)*
+        } => {
+            $(APPLET.add_listener_once(ev::$x, move |_| {
+                listen!($set_is_hovered, $set_is_active, $clicked: $flag);
+            });)*
+        };
+        {
+            @view
+            $set_is_hovered:ident
+            $set_is_active:ident
+            $clicked:ident
+            $($x:ident -> $flag:ident)*
+        } => {
+            view! {
+                <{..}
+                    $(on:$x=move |_| {
+                        listen!($set_is_hovered, $set_is_active, $clicked: $flag);
+                    })*
+                />
+            }
+        };
+    }
+
+    /// Creates an `impl Attribute` that controls the input parameters `set_is_hovered` and `set_is_active` and can also call `on_click_event()`.
+    fn bare_interaction<T: FnMut() + 'static>(
+        set_is_hovered: WriteSignal<bool>,
+        set_is_active: WriteSignal<bool>,
+        mut on_click_event: Option<T>,
+    ) -> impl Attribute {
+        let clicked = clicked_closure(set_is_hovered, set_is_active);
+        view! {
+            <{..}
+                {..event_attribute(set_is_hovered, set_is_active, clicked)}
+                on:click=move |_| {
+                    if IS_TOUCHSCREEN.get() == Some(&true) {
+                        listen!(set_is_hovered, set_is_active, clicked: deactivate);
+                        if let Some(ref mut on_click) = on_click_event {
+                            on_click();
+                        }
+                    }
+                }
+            />
+        }
+    }
+
+    /// Creates a closure that when called, creates window event listeners that control `set_is_hovered` and `set_is_active`.
+    fn clicked_closure(
+        set_is_hovered: WriteSignal<bool>,
+        set_is_active: WriteSignal<bool>,
+    ) -> impl Fn() + Copy {
+        move || {
+            listen!(set_is_hovered, set_is_active, clicked: active);
+            listen! {
+                set_is_hovered
+                set_is_active
+                clicked
+                mouseup -> not_active
+                touchend -> deactivate
+                pointerup -> not_active
+                touchcancel -> deactivate
+                pointercancel -> deactivate
+            }
+        }
+    }
+
+    /// Creates an attribute that controls `set_is_hovered` and `set_is_active` `on:` certain HTML events.
+    fn event_attribute<T: Fn() + Copy + 'static>(
+        set_is_hovered: WriteSignal<bool>,
+        set_is_active: WriteSignal<bool>,
+        clicked: T,
+    ) -> impl Attribute {
+        listen! {
+            @view
+            set_is_hovered
+            set_is_active
+            clicked
+            mouseup -> not_active
+            touchend -> deactivate
+            mousedown -> click_if_not_touchscreen
+            pointerup -> not_active
+            mouseenter -> hover
+            mouseleave -> not_hovered
+            touchstart -> hover_and_click
+            pointerdown -> click
+            touchcancel -> deactivate
+            pointerenter -> hover
+            pointerleave -> not_hovered
+            pointercancel -> deactivate
+        }
     }
 
     /// This creates an `interaction` framework as an attribute.
@@ -796,9 +920,9 @@ mod home {
 mod note_recognition {
     extern crate alloc;
 
-    use super::APPLET;
     use super::handler::Handler as _;
     use super::interact;
+    use super::{APPLET, Coordinates};
     use leptos::either::Either;
     use leptos::ev;
     use leptos::html::Button;
@@ -977,11 +1101,11 @@ mod note_recognition {
         /// A `WriteSignal` to the time when the clone was created.
         set_start_time: WriteSignal<Option<f64>>,
         /// The coordinates at which the clone started to exist.
-        start_coordinates: (f64, f64),
-        /// A `ReadSignal` to the coordinates of the note button. The first item in the tuple is the x-coordinate, and the second item in the tuple is the y-coordinate.
-        coordinates: ReadSignal<(f64, f64)>,
+        start_coordinates: Coordinates,
+        /// A `ReadSignal` to the coordinates of the note button.
+        coordinates: ReadSignal<Coordinates>,
         /// A `WriteSignal` to the coordinates of the note button.
-        set_coordinates: WriteSignal<(f64, f64)>,
+        set_coordinates: WriteSignal<Coordinates>,
     }
 
     impl NoteButtonClone {
@@ -1001,7 +1125,7 @@ mod note_recognition {
         fn new(note: u8, target: NodeRef<Button>) -> Self {
             let start_coordinates =
                 super::get_position_untransformed(target.get_untracked().unwrap().as_ref());
-            let (coordinates, set_coordinates) = APPLET.add_signal(start_coordinates);
+            let (coordinates, set_coordinates) = APPLET.add_signal(start_coordinates.clone());
             let (start_time, set_start_time) = APPLET.add_signal(None);
             Self {
                 note,
@@ -1020,12 +1144,12 @@ mod note_recognition {
                 window_size.width.get_untracked(),
                 window_size.height.get_untracked(),
             );
-            let new_coordinates = (
+            let new_coordinates = Coordinates(
                 self.start_coordinates.0,
                 self.get_elapsed_time(time)
                     .mul_add(1_f64, self.start_coordinates.1),
             );
-            self.set_coordinates.set(new_coordinates);
+            self.set_coordinates.set(new_coordinates.clone());
             !((-window_size.0..window_size.0 * 2_f64).contains(&new_coordinates.0)
                 && (-window_size.1..window_size.1 * 2_f64).contains(&new_coordinates.1))
         }
@@ -1137,9 +1261,9 @@ mod note_recognition {
         attribute: impl Attribute,
         /// The `NodeRef` that should represent the note button.
         target_ref: NodeRef<Button>,
-        /// The coordinates of the note button. The first item in the tuple is the x-coordinate, and the second item in the tuple is the y-coordinate.
+        /// The coordinates of the note button.
         #[prop(optional)]
-        coordinates: Option<ReadSignal<(f64, f64)>>,
+        coordinates: Option<ReadSignal<Coordinates>>,
     ) -> impl IntoView {
         let letter = *LETTERS.get(note as usize).unwrap_or(&'0');
         let number = *NUMBERS.get(note as usize).unwrap_or(&'\u{2080}');
