@@ -37,7 +37,7 @@ fn main() {
     });
 }
 
-/// A function that returns whether or not the current device is touch-screen. It is called once at
+/// A function that returns whether or not the current device is touch-screen. It is called once at the beginning of the app.
 fn is_touchscreen() -> bool {
     let Some(window) = web_sys::window() else {
         return false;
