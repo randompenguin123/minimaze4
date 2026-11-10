@@ -37,7 +37,7 @@ fn main() {
     });
 }
 
-/// A function that returns whether or not the current device is touch-screen. It is called once at the beginning of the app.
+/// A function that returns whether or not the current device is touch-screen. It is called once at
 fn is_touchscreen() -> bool {
     let Some(window) = web_sys::window() else {
         return false;
@@ -385,18 +385,15 @@ mod interact {
             view! {
                 <{..}
                     {..attribute}
-                    style:transform=move || {
-                        format!(
-                            "scale({})",
-                            if let PointerState::Enabled { is_hovered: true, .. } = interaction
-                                .pointer_state
-                                .get()
-                            {
-                                1.05
-                            } else {
-                                1_f32
-                            },
-                        )
+                    style:scale=move || {
+                        if let PointerState::Enabled { is_hovered: true, .. } = interaction
+                            .pointer_state
+                            .get()
+                        {
+                            "1.05"
+                        } else {
+                            "1"
+                        }
                     }
                     style:filter=move || {
                         format!(
@@ -1115,10 +1112,12 @@ mod note_recognition {
         set_start_time: WriteSignal<Option<f64>>,
         /// The coordinates at which the clone started to exist.
         start_coordinates: Coordinates,
+        /// The `NoteButtonClone`'s angular momentum in degrees per millisecond.
+        angular_momentum: f64,
         /// A `ReadSignal` to the coordinates of the note button.
-        coordinates: ReadSignal<Coordinates>,
+        position: ReadSignal<(Coordinates, f64)>,
         /// A `WriteSignal` to the coordinates of the note button.
-        set_coordinates: WriteSignal<Coordinates>,
+        set_position: WriteSignal<(Coordinates, f64)>,
     }
 
     impl NoteButtonClone {
@@ -1129,7 +1128,7 @@ mod note_recognition {
                     note=self.note
                     attribute=()
                     target_ref=NodeRef::new()
-                    coordinates=self.coordinates
+                    position=self.position
                 />
             }
         }
@@ -1138,15 +1137,16 @@ mod note_recognition {
         fn new(note: u8, target: NodeRef<Button>) -> Self {
             let start_coordinates =
                 super::get_position_untransformed(target.get_untracked().unwrap().as_ref());
-            let (coordinates, set_coordinates) = APPLET.add_signal(start_coordinates.clone());
+            let (position, set_position) = APPLET.add_signal((start_coordinates.clone(), 0_f64));
             let (start_time, set_start_time) = APPLET.add_signal(None);
             Self {
                 note,
                 start_time,
                 set_start_time,
                 start_coordinates,
-                coordinates,
-                set_coordinates,
+                angular_momentum: rand::random_range(-6_f64..6_f64),
+                position,
+                set_position,
             }
         }
 
@@ -1157,15 +1157,19 @@ mod note_recognition {
                 window_size.width.get_untracked(),
                 window_size.height.get_untracked(),
             );
-            let new_coordinates = Coordinates(
-                self.start_coordinates.0,
-                self.get_elapsed_time(time)
-                    .powi(2)
-                    .mul_add(0.0006, self.start_coordinates.1),
+            let elapsed_time = self.get_elapsed_time(time);
+            let new_position = (
+                Coordinates(
+                    self.start_coordinates.0,
+                    elapsed_time
+                        .powi(2)
+                        .mul_add(0.0006, self.start_coordinates.1),
+                ),
+                elapsed_time * self.angular_momentum,
             );
-            self.set_coordinates.set(new_coordinates.clone());
-            !((-window_size.0..window_size.0 * 2_f64).contains(&new_coordinates.0)
-                && (-window_size.1..window_size.1 * 2_f64).contains(&new_coordinates.1))
+            self.set_position.set(new_position.clone());
+            !((-window_size.0..window_size.0 * 2_f64).contains(&new_position.0.0)
+                && (-window_size.1..window_size.1 * 2_f64).contains(&new_position.0.1))
         }
 
         /// Gets the current elapsed time using the `current_time` as an `f64`. This function takes into account `self`'s `set_start_time` field.
@@ -1286,21 +1290,22 @@ mod note_recognition {
         attribute: impl Attribute,
         /// The `NodeRef` that should represent the note button.
         target_ref: NodeRef<Button>,
-        /// The coordinates of the note button.
+        /// The position and rotation of the note button.
         #[prop(optional)]
-        coordinates: Option<ReadSignal<Coordinates>>,
+        position: Option<ReadSignal<(Coordinates, f64)>>,
     ) -> impl IntoView {
         let letter = *LETTERS.get(note as usize).unwrap_or(&'0');
         let number = *NUMBERS.get(note as usize).unwrap_or(&'\u{2080}');
         let letter_number = [letter, number].iter().collect::<String>();
-        let coordinate_attribute = coordinates.map_or(Either::Left(()), |coordinates| {
+        let position_attribute = position.map_or(Either::Left(()), |position| {
             Either::Right(view! {
                 <{..}
                     style:margin="0"
                     style:position="fixed"
-                    style:left=move || format!("{}px", coordinates.get().0)
-                    style:top=move || format!("{}px", coordinates.get().1)
+                    style:left=move || format!("{}px", position.get().0.0)
+                    style:top=move || format!("{}px", position.get().0.1)
                     style:transition="none"
+                    style:rotate=move || format!("{}deg", position.get().1)
                 />
             })
         });
@@ -1316,7 +1321,7 @@ mod note_recognition {
                 style:font-size="20px"
                 style:text-align="center"
                 {..attribute}
-                {..coordinate_attribute}
+                {..position_attribute}
             >
                 {letter_number}
             </button>
