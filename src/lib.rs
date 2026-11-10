@@ -1112,7 +1112,7 @@ mod note_recognition {
         set_start_time: WriteSignal<Option<f64>>,
         /// The coordinates at which the clone started to exist.
         start_coordinates: Coordinates,
-        /// The `NoteButtonClone`'s angular momentum in degrees per millisecond.
+        /// The `NoteButtonClone`'s angular momentum.
         angular_momentum: f64,
         /// A `ReadSignal` to the coordinates of the note button.
         position: ReadSignal<(Coordinates, f64)>,
@@ -1144,7 +1144,7 @@ mod note_recognition {
                 start_time,
                 set_start_time,
                 start_coordinates,
-                angular_momentum: rand::random_range(-6_f64..6_f64),
+                angular_momentum: rand::random_range(-10_f64..10_f64),
                 position,
                 set_position,
             }
