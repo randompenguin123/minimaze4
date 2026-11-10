@@ -1160,7 +1160,8 @@ mod note_recognition {
             let new_coordinates = Coordinates(
                 self.start_coordinates.0,
                 self.get_elapsed_time(time)
-                    .mul_add(1_f64, self.start_coordinates.1),
+                    .powi(2)
+                    .mul_add(0.25, self.start_coordinates.1),
             );
             self.set_coordinates.set(new_coordinates.clone());
             !((-window_size.0..window_size.0 * 2_f64).contains(&new_coordinates.0)
