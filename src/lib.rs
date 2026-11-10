@@ -487,8 +487,7 @@ mod handler {
                     AppletHandle::Window(handle).rid();
                 }
             });
-            handle.dispose();
-            set_handle.dispose();
+            dispose_handles(handle, set_handle);
         }
 
         /// Creates a `window_event_listener()` call and returns a `ListenerHandle`.
@@ -561,8 +560,7 @@ mod handler {
 
     impl<T> SignalHandle for (ReadSignal<T>, WriteSignal<T>) {
         fn rid(self: Box<Self>) {
-            self.0.dispose();
-            self.1.dispose();
+            dispose_handles(self.0, self.1);
         }
     }
 
@@ -590,6 +588,18 @@ mod handler {
                 old_signals: Vec::new(),
                 current_applet,
                 set_current_applet,
+            }
+        }
+
+        /// Rids all handles, rids all old signals, and moves all new signals to the `Vec` of old signals.
+        fn rid_signals_and_handles(&mut self) {
+            for applet_handle in mem::take(&mut self.handles) {
+                applet_handle.rid();
+            }
+            for signal_handle in
+                mem::replace(&mut self.old_signals, mem::take(&mut self.new_signals))
+            {
+                signal_handle.rid();
             }
         }
     }
@@ -626,15 +636,7 @@ mod handler {
             let mut handler = self.inner.lock().unwrap();
             if let Some(handler) = handler.as_mut() {
                 handler.set_current_applet.set(applet_view);
-                for applet_handle in mem::take(&mut handler.handles) {
-                    applet_handle.rid();
-                }
-                for signal_handle in mem::replace(
-                    &mut handler.old_signals,
-                    mem::take(&mut handler.new_signals),
-                ) {
-                    signal_handle.rid();
-                }
+                handler.rid_signals_and_handles();
             } else {
                 *handler = Some(AppletHandler::new(applet_view));
             }
@@ -643,6 +645,11 @@ mod handler {
         /// Starts the animation loop.
         pub fn animate<T: FnMut(f64) + Send + 'static>(&'static self, each_frame: T) {
             *self.each_frame.lock().unwrap() = Some(Arc::new(Mutex::new(each_frame)));
+            self.start_animation();
+        }
+
+        /// Starts the animation loop, given that `self.each_frame` is already initialized.
+        fn start_animation(&'static self) {
             let [closure, clone] = TimeClosure::new_two();
             *clone.0.borrow_mut() = Some(Closure::new(move |time| {
                 self.animate_frame_and_request(&closure, time);
@@ -719,6 +726,12 @@ mod handler {
         each_frame: Mutex::new(None),
         inner: Mutex::new(None),
     };
+
+    /// Disposes of a `ReadSignal` and a `WriteSignal` of the same type.
+    fn dispose_handles<T>(handle: ReadSignal<T>, set_handle: WriteSignal<T>) {
+        handle.dispose();
+        set_handle.dispose();
+    }
 }
 
 /// This module contains all things related to the "Home" page: the page that has to do with selecting an applet.
@@ -1196,27 +1209,42 @@ mod note_recognition {
         view! { <NoteButton note attribute target_ref /> }
     }
 
+    /// A macro for triggering actions based on keypresses.
+    macro_rules! trigger {
+        {
+            $note:ident
+            $triggered:ident
+            $set_triggered:ident
+            $set_is_active:ident
+            $(
+                $event:ident -> $is_keypress:expr
+            )*
+        } => {
+            $(
+                APPLET.add_listener(ev::$event, move |keyboard_event| {
+                    key_triggered::<$is_keypress>(
+                        $note,
+                        &keyboard_event,
+                        $triggered,
+                        $set_triggered,
+                        $set_is_active,
+                    );
+                });
+            )*
+        };
+    }
+
     /// Triggers `set_is_active` when the `TRIGGERS` are triggered.
     fn add_triggers_to_interaction(note: u8, set_is_active: WriteSignal<bool>) {
         let (triggered, set_triggered) = APPLET.add_signal([false; TRIGGERS.len()]);
-        APPLET.add_listener(ev::keypress, move |keyboard_event| {
-            key_triggered::<true>(
-                note,
-                &keyboard_event,
-                triggered,
-                set_triggered,
-                set_is_active,
-            );
-        });
-        APPLET.add_listener(ev::keyup, move |keyboard_event| {
-            key_triggered::<false>(
-                note,
-                &keyboard_event,
-                triggered,
-                set_triggered,
-                set_is_active,
-            );
-        });
+        trigger! {
+            note
+            triggered
+            set_triggered
+            set_is_active
+            keypress -> true
+            keyup -> false
+        }
     }
 
     /// This function is called when a key is pressed.
