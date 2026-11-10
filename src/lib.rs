@@ -1262,11 +1262,7 @@ mod note_recognition {
                 break;
             }
         }
-        if triggered
-            .get()
-            .into_iter()
-            .any(|boolean| boolean == IS_KEYPRESS)
-        {
+        if triggered.get().into_iter().any(|boolean| boolean) == IS_KEYPRESS {
             set_is_active.set(IS_KEYPRESS);
         }
     }
