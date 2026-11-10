@@ -1161,7 +1161,7 @@ mod note_recognition {
                 self.start_coordinates.0,
                 self.get_elapsed_time(time)
                     .powi(2)
-                    .mul_add(0.0001, self.start_coordinates.1),
+                    .mul_add(0.0004, self.start_coordinates.1),
             );
             self.set_coordinates.set(new_coordinates.clone());
             !((-window_size.0..window_size.0 * 2_f64).contains(&new_coordinates.0)
