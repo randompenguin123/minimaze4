@@ -54,6 +54,15 @@ fn is_touchscreen() -> bool {
     }
 }
 
+/// The size of the window as a tuple of `f64`s as `(width, height)`.
+fn window_size() -> (f64, f64) {
+    let window_size = leptos_use_window_size::use_window_size();
+    (
+        window_size.width.get_untracked(),
+        window_size.height.get_untracked(),
+    )
+}
+
 #[component]
 fn Center(
     /// This field contains all of the elements inside the `<Center>` block. It is optional.
@@ -986,15 +995,15 @@ mod note_recognition {
         set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
         time: f64,
     ) {
-        let vec = Mutex::new(Vec::new());
+        let mutex: Mutex<Box<_>> = Mutex::new([][..].into());
         clone_list.with_untracked(|clone_list| {
-            *vec.lock().unwrap() = clone_list
+            *mutex.lock().unwrap() = clone_list
                 .iter()
                 .filter(move |(_, note_button_clone)| note_button_clone.animate(time))
                 .map(|(key, _)| key)
                 .collect();
         });
-        remove_selected_clones(&vec.lock().unwrap(), set_clone_list);
+        remove_selected_clones(&mutex.lock().unwrap(), set_clone_list);
     }
 
     /// Removes the selected clones, whose keys are stored in an `&[usize]`, from a `Slab<NoteButtonClone>`.
@@ -1144,7 +1153,7 @@ mod note_recognition {
                 start_time,
                 set_start_time,
                 start_coordinates,
-                angular_momentum: rand::random_range(-2_f64..2_f64),
+                angular_momentum: rand::random_range(-0.5..0.5),
                 position,
                 set_position,
             }
@@ -1152,11 +1161,7 @@ mod note_recognition {
 
         /// Animates the `NoteButtonClone` using the current `time` as an `f64`.
         fn animate(&self, time: f64) -> bool {
-            let window_size = leptos_use_window_size::use_window_size();
-            let window_size = (
-                window_size.width.get_untracked(),
-                window_size.height.get_untracked(),
-            );
+            let window_size = super::window_size();
             let elapsed_time = self.get_elapsed_time(time);
             let new_position = (
                 Coordinates(
