@@ -1144,7 +1144,7 @@ mod note_recognition {
                 start_time,
                 set_start_time,
                 start_coordinates,
-                angular_momentum: rand::random_range(-10_f64..10_f64),
+                angular_momentum: rand::random_range(-2_f64..2_f64),
                 position,
                 set_position,
             }
@@ -1303,7 +1303,7 @@ mod note_recognition {
                     style:margin="0"
                     style:position="fixed"
                     style:left=move || format!("{}px", position.get().0.0)
-                    // style:top=move || format!("{}px", position.get().0.1)
+                    style:top=move || format!("{}px", position.get().0.1)
                     style:transition="none"
                     style:rotate=move || format!("{}deg", position.get().1)
                 />
