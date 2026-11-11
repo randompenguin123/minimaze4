@@ -1311,6 +1311,7 @@ mod note_recognition {
                     style:top=move || format!("{}px", position.get().0.1)
                     style:transition="none"
                     style:rotate=move || format!("{}deg", position.get().1)
+                    style:pointer-events="none"
                 />
             })
         });
