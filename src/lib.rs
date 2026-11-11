@@ -1303,7 +1303,7 @@ mod note_recognition {
                     style:margin="0"
                     style:position="fixed"
                     style:left=move || format!("{}px", position.get().0.0)
-                    style:top=move || format!("{}px", position.get().0.1)
+                    // style:top=move || format!("{}px", position.get().0.1)
                     style:transition="none"
                     style:rotate=move || format!("{}deg", position.get().1)
                 />
