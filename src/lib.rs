@@ -942,6 +942,7 @@ mod note_recognition {
     use super::handler::Handler as _;
     use super::interact;
     use super::{APPLET, Coordinates};
+    use core::iter;
     use leptos::either::Either;
     use leptos::ev;
     use leptos::html::Button;
@@ -1096,7 +1097,67 @@ mod note_recognition {
                 style:margin-left="25px"
                 style:margin-right="25px"
                 style:padding="0px 23px"
-            ></div>
+            >
+                <Stave />
+            </div>
+        }
+    }
+
+    #[component]
+    fn Stave() -> impl IntoView {
+        view! {
+            <div
+                style:display="flex"
+                style:flex-direction="column"
+                style:align-items="center"
+                style:width="100%"
+                style:gap="23px"
+            >
+                <StaveLine length=StaveLength::Gone />
+                {iter::repeat_with(|| view! { <StaveLine length=StaveLength::Short /> })
+                    .take(2)
+                    .collect_view()}
+                {iter::repeat_with(|| view! { <StaveLine length=StaveLength::Long /> })
+                    .take(5)
+                    .collect_view()}
+                <StaveLine length=StaveLength::Short />
+                {iter::repeat_with(|| view! { <StaveLine length=StaveLength::Long /> })
+                    .take(5)
+                    .collect_view()}
+                {iter::repeat_with(|| view! { <StaveLine length=StaveLength::Short /> })
+                    .take(2)
+                    .collect_view()}
+                <StaveLine length=StaveLength::Gone />
+            </div>
+        }
+    }
+
+    #[component]
+    fn StaveLine(
+        /// The length of the stave.
+        length: StaveLength,
+    ) -> impl IntoView {
+        view! { <div style:height="0" style:border-top="2px solid #000" style:width=length.css_width() /> }
+    }
+
+    /// An enum describing the three possible lengths of a stave line.
+    enum StaveLength {
+        /// No stave line. This variant is used to create a gap.
+        Gone,
+        /// A short stave line for Low C, Low E, Middle C, Treble A, and High C.
+        Short,
+        /// A long stave line that fills the space given.
+        Long,
+    }
+
+    impl StaveLength {
+        /// Returns the corresponding width as a CSS `width` style.
+        const fn css_width(&self) -> &'static str {
+            match self {
+                Self::Gone => "0",
+                Self::Short => "80px",
+                Self::Long => "100%",
+            }
         }
     }
 
