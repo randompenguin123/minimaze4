@@ -657,7 +657,7 @@ mod handler {
 
         /// Starts the animation loop, given that `self.each_frame` is already initialized.
         fn start_animation(&'static self) {
-            let [closure, clone] = TimeClosure::new_two();
+            let (closure, clone) = TimeClosure::new_two();
             *clone.0.borrow_mut() = Some(Closure::new(move |time| {
                 self.animate_frame_and_request(&closure, time);
             }));
@@ -682,10 +682,10 @@ mod handler {
 
     impl TimeClosure {
         /// Creates two `TimeClosure`s, one of which is the clone of the other.
-        fn new_two() -> [Self; 2] {
+        fn new_two() -> (Self, Self) {
             let closure = Self(Rc::new(RefCell::new(None::<Closure<dyn FnMut(f64)>>)));
             let clone = closure.clone();
-            [closure, clone]
+            (closure, clone)
         }
 
         /// Calls the `TimeClosure`.
@@ -1149,6 +1149,8 @@ mod note_recognition {
         top: usize,
         /// The height of the clef in pixels.
         height: usize,
+        /// The SVG's viewbox, as 4 f64s.
+        viewbox: [f64; 4],
         /// The clef's SVG path.
         path: &'static str,
     ) -> impl IntoView {
@@ -1160,7 +1162,10 @@ mod note_recognition {
                 style:top=format!("{top}px")
                 style:height=format!("{height}px")
             >
-                <svg xmlns="http://www.w3.org/2000/svg" viewbox="20 4 52 145">
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewbox=format!("{} {} {} {}", viewbox[0], viewbox[1], viewbox[2], viewbox[3])
+                >
                     <path d=path stroke="#000" />
                 </svg>
             </div>
@@ -1173,6 +1178,7 @@ mod note_recognition {
             <Clef
                 top=62
                 height=150
+                viewbox=[20.0, 4.0, 52.0, 145.0]
                 path="M 51.688 5.25
                 c -5.427 -0.1409 -11.774 12.818 -11.563 24.375
                 c 0.049 3.52 1.16 10.659 2.781 19.625
@@ -1225,6 +1231,7 @@ mod note_recognition {
             <Clef
                 top=233
                 height=75
+                viewbox=[160.0, 278.0, 424.09, 496.4]
                 path="m 190.85 451.25
                 c 11.661 14.719 32.323 24.491 55.844 24.491
                 c 36.401 0 65.889 -23.372 65.889 -52.214
