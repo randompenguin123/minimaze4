@@ -1164,7 +1164,7 @@ mod note_recognition {
             >
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    viewbox=format!("{} {} {} {}", viewbox[0], viewbox[1], viewbox[2], viewbox[3])
+                    viewBox=format!("{} {} {} {}", viewbox[0], viewbox[1], viewbox[2], viewbox[3])
                 >
                     <path d=path stroke="#000" />
                 </svg>
