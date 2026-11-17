@@ -24,6 +24,9 @@ const STYLE: &str = "
 }
 ";
 
+/// The link to the SVG XML namespace
+const SVG: &str = "http://www.w3.org/2000/svg";
+
 #[wasm_bindgen(start)]
 fn main() {
     APPLET.set_applet(AppletView::Home);
@@ -743,6 +746,7 @@ mod handler {
 
 /// This module contains all things related to the "Home" page: the page that has to do with selecting an applet.
 mod home {
+    use super::SVG;
     use super::handler::{APPLET, DefaultHandler};
     use super::interact;
     use super::interact::PointerState;
@@ -870,7 +874,7 @@ mod home {
                 }
             >
                 <svg
-                    xmlns="http://www.w3.org/2000/svg"
+                    xmlns=SVG
                     viewBox="0 0 24 24"
                     style:width="20px"
                     style:height="20px"
@@ -942,7 +946,7 @@ mod note_recognition {
 
     use super::handler::Handler as _;
     use super::interact;
-    use super::{APPLET, Coordinates};
+    use super::{APPLET, Coordinates, SVG};
     use core::iter;
     use leptos::either::Either;
     use leptos::ev;
@@ -1163,7 +1167,7 @@ mod note_recognition {
                 style:height=format!("{height}px")
             >
                 <svg
-                    xmlns="http://www.w3.org/2000/svg"
+                    xmlns=SVG
                     viewBox=format!("{} {} {} {}", viewbox[0], viewbox[1], viewbox[2], viewbox[3])
                 >
                     <path d=path stroke="#000" />
@@ -1258,6 +1262,85 @@ mod note_recognition {
                 s -32.323 14.471-32.323 32.323
                 z"
             />
+        }
+    }
+
+    #[component]
+    fn WholeNote() -> impl IntoView {
+        view! {
+            <svg
+                xmlns=SVG
+                viewBox="177 900 3482.9198 2187.222"
+            >
+                <path
+                    d="m 2532 1826
+                    c -43 -149 -114 -304 -189 -415
+                    c -74 -111 -193 -206 -311 -259
+                    c -117 -52 -269 -55 -380 -29
+                    c -111 27 -235 98 -310 196
+                    c -74 98 -127 203 -144 345
+                    c -18 143 26 311 70 460
+                    c 43 150 97 315 190 444
+                    c 94 130 209 197 327 249
+                    c 118 53 253 37 364 10
+                    c 111 -27 218 -78 292 -175
+                    c 75 -98 150 -217 169 -360
+                    c 18 -143 -34 -316 -78 -466
+                    z
+                    m 901 693
+                    c -141 164 -350 301 -607 395
+                    c -256 95 -551 145 -854 145
+                    c -303 0 -604 -50 -872 -145
+                    C 832 2820 605 2683 443 2519
+                    C 282 2355 190 2169 178 1980
+                    c -12 -190 56 -376 198 -540
+                    c 141 -164 350 -301 607 -395
+                    c 256 -95 551 -145 854 -145
+                    c 303 0 603 50 872 145
+                    c 268 94 494 231 656 395
+                    c 162 164 253 350 265 539
+                    c 12 190 -56 376 -197 540
+                    z"
+                    fill="#000"
+                    stroke="#fff"
+                />
+                <path
+                    d="m 2532 1826
+                    c -43 -149 -114 -304 -189 -415
+                    c -74 -111 -193 -206 -311 -259
+                    c -117 -52 -269 -55 -380 -29
+                    c -111 27 -235 98 -310 196
+                    c -74 98 -127 203 -144 345
+                    c -18 143 26 311 70 460
+                    c 43 150 97 315 190 444
+                    c 94 130 209 197 327 249
+                    c 118 53 253 37 364 10
+                    c 111 -27 218 -78 292 -175
+                    c 75 -98 150 -217 169 -360
+                    c 18 -143 -34 -316 -78 -466
+                    z"
+                    fill="none"
+                    stroke="#000"
+                />
+                <path
+                    d="m 3433 2519
+                    c -141 164 -350 301 -607 395
+                    c -256 95 -551 145 -854 145
+                    c -303 0 -604 -50 -872 -145
+                    C 832 2820 605 2683 443 2519
+                    C 282 2355 190 2169 178 1980
+                    c -12 -190 56 -376 198 -540
+                    c 141 -164 350 -301 607 -395
+                    c 256 -95 551 -145 854 -145
+                    c 303 0 603 50 872 145
+                    c 268 94 494 231 656 395
+                    c 162 164 253 350 265 539
+                    c 12 190 -56 376 -197 540
+                    z"
+                    fill="none"
+                    stroke="#000"
+                />
+            </svg>
         }
     }
 
