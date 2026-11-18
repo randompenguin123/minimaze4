@@ -873,12 +873,7 @@ mod home {
                     }
                 }
             >
-                <svg
-                    xmlns=SVG
-                    viewBox="0 0 24 24"
-                    style:width="20px"
-                    style:height="20px"
-                >
+                <svg xmlns=SVG viewBox="0 0 24 24" style:width="20px" style:height="20px">
                     <path
                         d="M 6 12
                         H 18
@@ -954,12 +949,14 @@ mod note_recognition {
     use leptos::prelude::*;
     use leptos::tachys::html::attribute::Attribute;
     use leptos::tachys::html::event::KeyboardEvent;
+    use num_enum::TryFromPrimitive;
     use slab::Slab;
     use std::sync::Mutex;
 
     #[component]
     pub fn App() -> impl IntoView {
         let (clone_list, set_clone_list) = APPLET.add_signal(Slab::<NoteButtonClone>::new());
+        let (note_index, _) = APPLET.add_signal(NoteIndex::random());
         APPLET.animate(move |time| animate_clones(clone_list, set_clone_list, time));
         view! {
             <div style:overflow="hidden" {..super::absolute_position()}>
@@ -979,7 +976,7 @@ mod note_recognition {
                                 <NoteButtons set_clone_list />
                             </super::Center>
                         </div>
-                        <NoteFlashcard />
+                        <NoteFlashcard note_index=note_index />
                     </super::Center>
                 </div>
                 {move || {
@@ -992,6 +989,50 @@ mod note_recognition {
                         })
                 }}
             </div>
+        }
+    }
+
+    /// A note from Pedal B to Top D, represented as an `u8` in `0..=30`.
+    #[repr(u8)]
+    #[derive(Clone, TryFromPrimitive)]
+    enum NoteIndex {
+        PedalB = 0,
+        LowC = 1,
+        LowD = 2,
+        LowE = 3,
+        LowF = 4,
+        LowG = 5,
+        LowA = 6,
+        LowB = 7,
+        BassC = 8,
+        BassD = 9,
+        BassE = 10,
+        BassF = 11,
+        BassG = 12,
+        BassA = 13,
+        BassB = 14,
+        MiddleC = 15,
+        TrebleD = 16,
+        TrebleE = 17,
+        TrebleF = 18,
+        TrebleG = 19,
+        TrebleA = 20,
+        TrebleB = 21,
+        TrebleC = 22,
+        HighD = 23,
+        HighE = 24,
+        HighF = 25,
+        HighG = 26,
+        HighA = 27,
+        HighB = 28,
+        HighC = 29,
+        TopD = 30,
+    }
+
+    impl NoteIndex {
+        /// Creates a random note index.
+        fn random() -> Self {
+            Self::try_from(rand::random_range(0..31)).unwrap()
         }
     }
 
@@ -1093,7 +1134,10 @@ mod note_recognition {
     }
 
     #[component]
-    fn NoteFlashcard() -> impl IntoView {
+    fn NoteFlashcard(
+        /// A `ReadSignal` to a `NoteIndex` representing at which note the whole note SVG is located on the stave.
+        note_index: ReadSignal<NoteIndex>,
+    ) -> impl IntoView {
         view! {
             <div
                 {..flashcard()}
@@ -1106,6 +1150,7 @@ mod note_recognition {
                 <Stave />
                 <TrebleClef />
                 <BassClef />
+                <WholeNote note_index=note_index />
             </div>
         }
     }
@@ -1266,81 +1311,96 @@ mod note_recognition {
     }
 
     #[component]
-    fn WholeNote() -> impl IntoView {
+    fn WholeNote(
+        /// A `ReadSignal` to a `NoteIndex` representing at which note the whole note SVG is located on the stave.
+        note_index: ReadSignal<NoteIndex>,
+    ) -> impl IntoView {
         view! {
-            <svg
-                xmlns=SVG
-                viewBox="177 900 3482.9198 2187.222"
+            <div
+                style:position="absolute"
+                style:display="flex"
+                style:justify-content="center"
+                style:top=move || {
+                    format!(
+                        "{}px",
+                        (30_f64 - f64::from(note_index.get() as u8)).mul_add(12.5_f64, 2_f64),
+                    )
+                }
+                style:left="calc(50% - 25px)"
+                style:width="50px"
+                style:height="23px"
             >
-                <path
-                    d="m 2532 1826
-                    c -43 -149 -114 -304 -189 -415
-                    c -74 -111 -193 -206 -311 -259
-                    c -117 -52 -269 -55 -380 -29
-                    c -111 27 -235 98 -310 196
-                    c -74 98 -127 203 -144 345
-                    c -18 143 26 311 70 460
-                    c 43 150 97 315 190 444
-                    c 94 130 209 197 327 249
-                    c 118 53 253 37 364 10
-                    c 111 -27 218 -78 292 -175
-                    c 75 -98 150 -217 169 -360
-                    c 18 -143 -34 -316 -78 -466
-                    z
-                    m 901 693
-                    c -141 164 -350 301 -607 395
-                    c -256 95 -551 145 -854 145
-                    c -303 0 -604 -50 -872 -145
-                    C 832 2820 605 2683 443 2519
-                    C 282 2355 190 2169 178 1980
-                    c -12 -190 56 -376 198 -540
-                    c 141 -164 350 -301 607 -395
-                    c 256 -95 551 -145 854 -145
-                    c 303 0 603 50 872 145
-                    c 268 94 494 231 656 395
-                    c 162 164 253 350 265 539
-                    c 12 190 -56 376 -197 540
-                    z"
-                    fill="#000"
-                    stroke="#fff"
-                />
-                <path
-                    d="m 2532 1826
-                    c -43 -149 -114 -304 -189 -415
-                    c -74 -111 -193 -206 -311 -259
-                    c -117 -52 -269 -55 -380 -29
-                    c -111 27 -235 98 -310 196
-                    c -74 98 -127 203 -144 345
-                    c -18 143 26 311 70 460
-                    c 43 150 97 315 190 444
-                    c 94 130 209 197 327 249
-                    c 118 53 253 37 364 10
-                    c 111 -27 218 -78 292 -175
-                    c 75 -98 150 -217 169 -360
-                    c 18 -143 -34 -316 -78 -466
-                    z"
-                    fill="none"
-                    stroke="#000"
-                />
-                <path
-                    d="m 3433 2519
-                    c -141 164 -350 301 -607 395
-                    c -256 95 -551 145 -854 145
-                    c -303 0 -604 -50 -872 -145
-                    C 832 2820 605 2683 443 2519
-                    C 282 2355 190 2169 178 1980
-                    c -12 -190 56 -376 198 -540
-                    c 141 -164 350 -301 607 -395
-                    c 256 -95 551 -145 854 -145
-                    c 303 0 603 50 872 145
-                    c 268 94 494 231 656 395
-                    c 162 164 253 350 265 539
-                    c 12 190 -56 376 -197 540
-                    z"
-                    fill="none"
-                    stroke="#000"
-                />
-            </svg>
+                <svg xmlns=SVG viewBox="177 900 3482.9198 2187.222">
+                    <path
+                        d="m 2532 1826
+                        c -43 -149 -114 -304 -189 -415
+                        c -74 -111 -193 -206 -311 -259
+                        c -117 -52 -269 -55 -380 -29
+                        c -111 27 -235 98 -310 196
+                        c -74 98 -127 203 -144 345
+                        c -18 143 26 311 70 460
+                        c 43 150 97 315 190 444
+                        c 94 130 209 197 327 249
+                        c 118 53 253 37 364 10
+                        c 111 -27 218 -78 292 -175
+                        c 75 -98 150 -217 169 -360
+                        c 18 -143 -34 -316 -78 -466
+                        z
+                        m 901 693
+                        c -141 164 -350 301 -607 395
+                        c -256 95 -551 145 -854 145
+                        c -303 0 -604 -50 -872 -145
+                        C 832 2820 605 2683 443 2519
+                        C 282 2355 190 2169 178 1980
+                        c -12 -190 56 -376 198 -540
+                        c 141 -164 350 -301 607 -395
+                        c 256 -95 551 -145 854 -145
+                        c 303 0 603 50 872 145
+                        c 268 94 494 231 656 395
+                        c 162 164 253 350 265 539
+                        c 12 190 -56 376 -197 540
+                        z"
+                        fill="#000"
+                        stroke="#fff"
+                    />
+                    <path
+                        d="m 2532 1826
+                        c -43 -149 -114 -304 -189 -415
+                        c -74 -111 -193 -206 -311 -259
+                        c -117 -52 -269 -55 -380 -29
+                        c -111 27 -235 98 -310 196
+                        c -74 98 -127 203 -144 345
+                        c -18 143 26 311 70 460
+                        c 43 150 97 315 190 444
+                        c 94 130 209 197 327 249
+                        c 118 53 253 37 364 10
+                        c 111 -27 218 -78 292 -175
+                        c 75 -98 150 -217 169 -360
+                        c 18 -143 -34 -316 -78 -466
+                        z"
+                        fill="none"
+                        stroke="#000"
+                    />
+                    <path
+                        d="m 3433 2519
+                        c -141 164 -350 301 -607 395
+                        c -256 95 -551 145 -854 145
+                        c -303 0 -604 -50 -872 -145
+                        C 832 2820 605 2683 443 2519
+                        C 282 2355 190 2169 178 1980
+                        c -12 -190 56 -376 198 -540
+                        c 141 -164 350 -301 607 -395
+                        c 256 -95 551 -145 854 -145
+                        c 303 0 603 50 872 145
+                        c 268 94 494 231 656 395
+                        c 162 164 253 350 265 539
+                        c 12 190 -56 376 -197 540
+                        z"
+                        fill="none"
+                        stroke="#000"
+                    />
+                </svg>
+            </div>
         }
     }
 
@@ -1348,7 +1408,7 @@ mod note_recognition {
     enum StaveLength {
         /// No stave line. This variant is used to create a gap.
         Gone,
-        /// A short stave line for Low C, Low E, Middle C, Treble A, and High C.
+        /// A short stave line for Low C, Low E, Middle C, High A, and High C.
         Short,
         /// A long stave line that fills the space given.
         Long,
