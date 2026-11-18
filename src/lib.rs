@@ -1064,6 +1064,8 @@ mod note_recognition {
 
     #[component]
     fn TimeCard() -> impl IntoView {
+        let (start_stop_restart_button_text, _) = APPLET.add_signal("Start");
+        let (pause_resume_reset_button_text, _) = APPLET.add_signal("Reset");
         view! {
             <div
                 {..flashcard()}
@@ -1081,8 +1083,8 @@ mod note_recognition {
                     <Statistic name="Incorrect".to_owned() />
                 </StatisticsColumn>
                 <StatisticsColumn>
-                    <TimingButton />
-                    <TimingButton />
+                    <TimingButton text=start_stop_restart_button_text />
+                    <TimingButton text=pause_resume_reset_button_text />
                 </StatisticsColumn>
             </div>
         }
@@ -1117,7 +1119,10 @@ mod note_recognition {
     }
 
     #[component]
-    fn TimingButton() -> impl IntoView {
+    fn TimingButton(
+        /// The text shown on the timing button.
+        text: ReadSignal<&'static str>,
+    ) -> impl IntoView {
         view! {
             <div
                 style:width="150px"
@@ -1129,7 +1134,9 @@ mod note_recognition {
                 style:font-family="inherit"
                 style:font-size="x-large"
                 {..interact::interactive(|| ()).0}
-            />
+            >
+                {move || text.get()}
+            </div>
         }
     }
 
