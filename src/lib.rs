@@ -1133,6 +1133,9 @@ mod note_recognition {
                 style:background-color="#fff"
                 style:font-family="inherit"
                 style:font-size="x-large"
+                style:display="flex"
+                style:align-items="center"
+                style:justify-content="center"
                 {..interact::interactive(|| ()).0}
             >
                 {move || text.get()}
