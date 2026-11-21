@@ -959,7 +959,7 @@ mod note_recognition {
     #[component]
     pub fn App() -> impl IntoView {
         let (clone_list, set_clone_list) = APPLET.add_signal(Slab::<NoteButtonClone>::new());
-        let (note_index, _) = APPLET.add_signal(NoteIndex::random());
+        let (note_index, set_note_index) = APPLET.add_signal(NoteIndex::random());
         APPLET.animate(move |time| animate_clones(clone_list, set_clone_list, time));
         view! {
             <div style:overflow="hidden" {..super::absolute_position()}>
@@ -976,7 +976,7 @@ mod note_recognition {
                         >
                             <super::Center>
                                 <TimeCard />
-                                <NoteButtons set_clone_list />
+                                <NoteButtons set_clone_list note_index set_note_index />
                             </super::Center>
                         </div>
                         <NoteFlashcard note_index=note_index />
@@ -1036,6 +1036,32 @@ mod note_recognition {
         /// Creates a random note index.
         fn random() -> Self {
             Self::try_from(rand::random_range(0..31)).unwrap()
+        }
+
+        /// Given a mutable reference to a `NoteIndex`, change the `NoteIndex` behind that reference to a random `NoteIndex` that is necessarily different from the current `NoteIndex` behind the reference.
+        fn change(&mut self) {
+            let random = rand::random_range(0..30);
+            let random = random + u8::from(random >= *self as u8);
+            *self = Self::try_from(random).unwrap();
+        }
+
+        /// Converts the `NoteIndex` into the `NoteLetter` found at the end of the enum variant's name. For example, `NoteIndex::TrebleA` will be converted into `NoteLetter::A`.
+        const fn letter(self) -> NoteLetter {
+            match self {
+                Self::LowA | Self::BassA | Self::TrebleA | Self::HighA => NoteLetter::A,
+                Self::PedalB | Self::LowB | Self::BassB | Self::TrebleB | Self::HighB => {
+                    NoteLetter::B
+                }
+                Self::LowC | Self::BassC | Self::MiddleC | Self::TrebleC | Self::HighC => {
+                    NoteLetter::C
+                }
+                Self::LowD | Self::BassD | Self::TrebleD | Self::HighD | Self::TopD => {
+                    NoteLetter::D
+                }
+                Self::LowE | Self::BassE | Self::TrebleE | Self::HighE => NoteLetter::E,
+                Self::LowF | Self::BassF | Self::TrebleF | Self::HighF => NoteLetter::F,
+                Self::LowG | Self::BassG | Self::TrebleG | Self::HighG => NoteLetter::G,
+            }
         }
     }
 
@@ -1450,7 +1476,7 @@ mod note_recognition {
     }
 
     /// The letter representation of a note.
-    #[derive(Clone, Copy, EnumIter)]
+    #[derive(Clone, Copy, EnumIter, PartialEq, Eq)]
     enum NoteLetter {
         A = 0,
         B = 1,
@@ -1466,10 +1492,15 @@ mod note_recognition {
         fn into_note_button(
             self,
             set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
+            note_index: ReadSignal<NoteIndex>,
+            set_note_index: WriteSignal<NoteIndex>,
         ) -> impl IntoView {
             let target_ref = NodeRef::new();
             let (attribute, interaction) = interact::interactive(move || {
                 add_clone(self, set_clone_list, target_ref);
+                if self == note_index.get().letter() {
+                    set_note_index.update(NoteIndex::change);
+                }
             });
             add_triggers_to_interaction(self, interaction.set_is_active);
             view! { <NoteButton note=self attribute target_ref /> }
@@ -1697,11 +1728,17 @@ mod note_recognition {
     fn NoteButtons(
         /// A `WriteSignal` to a list of `NoteButtonClone`s.
         set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
+        /// A `ReadSignal` to the `NoteIndex` describing where the whole note SVG is on the stave. This is needed in order to verify if the user recognized the note correctly when clicking a note button.
+        note_index: ReadSignal<NoteIndex>,
+        /// A `WriteSignal` to the `NoteIndex` describing where the whole note SVG is on the stave. This is needed in order to change the location of the whole note SVG when the user recognizes the note correctly and clicks a note button.
+        set_note_index: WriteSignal<NoteIndex>,
     ) -> impl IntoView {
         view! {
             <div>
                 {NoteLetter::iter()
-                    .map(|number| number.into_note_button(set_clone_list))
+                    .map(|number| {
+                        number.into_note_button(set_clone_list, note_index, set_note_index)
+                    })
                     .collect_view()}
             </div>
         }
