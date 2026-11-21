@@ -1474,6 +1474,19 @@ mod note_recognition {
             add_triggers_to_interaction(self, interaction.set_is_active);
             view! { <NoteButton note=self attribute target_ref /> }
         }
+
+        /// The text that a note button of this `NoteLetter` would display. It consists of an uppercase letter followed by a number in subscript.
+        const fn display_text(self) -> &'static str {
+            match self {
+                Self::A => "A\u{2081}",
+                Self::B => "B\u{2082}",
+                Self::C => "C\u{2083}",
+                Self::D => "D\u{2084}",
+                Self::E => "E\u{2085}",
+                Self::F => "F\u{2086}",
+                Self::G => "G\u{2087}",
+            }
+        }
     }
 
     /// This struct describes a moving clone of a note button.
@@ -1564,12 +1577,6 @@ mod note_recognition {
             "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7",
         ],
     ];
-    /// The letters shown on the note buttons.
-    const LETTERS: [char; 7] = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-    /// The subscript numbers shown on the note buttons.
-    const NUMBERS: [char; 7] = [
-        '\u{2081}', '\u{2082}', '\u{2083}', '\u{2084}', '\u{2085}', '\u{2086}', '\u{2087}',
-    ];
 
     /// A macro for triggering actions based on keypresses.
     macro_rules! trigger {
@@ -1651,9 +1658,7 @@ mod note_recognition {
         #[prop(optional)]
         position: Option<ReadSignal<(Coordinates, f64)>>,
     ) -> impl IntoView {
-        let letter = *LETTERS.get(note as usize).unwrap_or(&'0');
-        let number = *NUMBERS.get(note as usize).unwrap_or(&'\u{2080}');
-        let letter_number = [letter, number].iter().collect::<String>();
+        let letter_number = note.display_text();
         let position_attribute = position.map_or(Either::Left(()), |position| {
             Either::Right(view! {
                 <{..}
