@@ -170,7 +170,7 @@ mod interact {
     }
 
     /// This enum represents the location and status of a pointer in regards to an HTML element.
-    #[derive(Clone)]
+    #[derive(Clone, Copy)]
     pub enum PointerState {
         /// This enum variant represents the state when the HTML element is disabled.
         Disabled,
@@ -754,9 +754,10 @@ mod home {
     use base64::Engine as _;
     use leptos::prelude::*;
     use strum::IntoEnumIterator as _;
+    use strum_macros::EnumIter;
 
     /// This enum represents an applet that can be viewed.
-    #[derive(Clone)]
+    #[derive(Clone, Copy)]
     pub enum AppletView {
         /// This variant represents the Home or applet selection view.
         Home,
@@ -765,7 +766,7 @@ mod home {
     }
 
     /// This enum represents an applet that has an icon button.
-    #[derive(Clone, strum_macros::EnumIter)]
+    #[derive(Clone, Copy, EnumIter)]
     pub enum AppletWithIconButton {
         /// This variant is the Note Recognition game.
         NoteRecognition,
@@ -773,11 +774,11 @@ mod home {
 
     impl AppletView {
         /// This function returns the `Applet View` as an `impl IntoView`.
-        fn view(&self) -> impl IntoView + use<> {
-            match *self {
+        fn view(self) -> impl IntoView + use<> {
+            match self {
                 Self::Home => Box::new(
                     AppletWithIconButton::iter()
-                        .map(|specification| specification.icon_button())
+                        .map(AppletWithIconButton::icon_button)
                         .collect_view(),
                 )
                 .into_any(),
@@ -788,8 +789,8 @@ mod home {
 
     impl AppletWithIconButton {
         /// This function returns the `AppletWithIconButton`'s icon embedded inside the `background-image` of a `<button>`.
-        fn icon_button(&self) -> impl IntoView + use<> {
-            let clone = AppletView::Specified(self.clone());
+        fn icon_button(self) -> impl IntoView + use<> {
+            let view = AppletView::Specified(self);
             view! {
                 <button
                     style:margin="30px"
@@ -799,21 +800,21 @@ mod home {
                     style:border-radius="16px"
                     style:background-size="cover"
                     style:background-image=format!("url('{}')", self.icon_as_uri())
-                    {..interact::interactive(move || APPLET.set_applet(clone.clone())).0}
+                    {..interact::interactive(move || APPLET.set_applet(view)).0}
                 />
             }
         }
 
         /// This function returns the `AppletWithIconButton` as an `impl IntoView`.
-        fn view(&self) -> impl IntoView + use<> {
-            match *self {
+        fn view(self) -> impl IntoView + use<> {
+            match self {
                 Self::NoteRecognition => note_recognition::App,
             }
         }
 
         /// This function returns the URI for the icon image asset of the `AppletWithIconButton`.
-        fn icon_as_uri(&self) -> String {
-            let bytes = match *self {
+        fn icon_as_uri(self) -> String {
+            let bytes = match self {
                 Self::NoteRecognition => include_bytes!("note_recognition_icon.png"),
             };
             let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
@@ -952,6 +953,8 @@ mod note_recognition {
     use num_enum::TryFromPrimitive;
     use slab::Slab;
     use std::sync::Mutex;
+    use strum::IntoEnumIterator as _;
+    use strum_macros::EnumIter;
 
     #[component]
     pub fn App() -> impl IntoView {
@@ -994,7 +997,7 @@ mod note_recognition {
 
     /// A note from Pedal B to Top D, represented as an `u8` in `0..=30`.
     #[repr(u8)]
-    #[derive(Clone, TryFromPrimitive)]
+    #[derive(Clone, Copy, TryFromPrimitive)]
     enum NoteIndex {
         PedalB = 0,
         LowC = 1,
@@ -1446,10 +1449,37 @@ mod note_recognition {
         }
     }
 
+    /// The letter representation of a note.
+    #[derive(Clone, Copy, EnumIter)]
+    enum NoteLetter {
+        A = 0,
+        B = 1,
+        C = 2,
+        D = 3,
+        E = 4,
+        F = 5,
+        G = 6,
+    }
+
+    impl NoteLetter {
+        /// This function creates a clickable note button using a `WriteSignal` to a list of `NoteButtonClone`s.
+        fn into_note_button(
+            self,
+            set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
+        ) -> impl IntoView {
+            let target_ref = NodeRef::new();
+            let (attribute, interaction) = interact::interactive(move || {
+                add_clone(self, set_clone_list, target_ref);
+            });
+            add_triggers_to_interaction(self, interaction.set_is_active);
+            view! { <NoteButton note=self attribute target_ref /> }
+        }
+    }
+
     /// This struct describes a moving clone of a note button.
     struct NoteButtonClone {
-        /// The `u8` from 0 to 6 that describes the note.
-        note: u8,
+        /// The `NoteLetter` that describes the note.
+        note: NoteLetter,
         /// The time when the clone was created. The value may be `None` if the clone has not run an update loop yet.
         start_time: ReadSignal<Option<f64>>,
         /// A `WriteSignal` to the time when the clone was created.
@@ -1478,7 +1508,7 @@ mod note_recognition {
         }
 
         /// Creates a new `NoteButtonCloneArc` from a note number and an HTML `Button` target.
-        fn new(note: u8, target: NodeRef<Button>) -> Self {
+        fn new(note: NoteLetter, target: NodeRef<Button>) -> Self {
             let start_coordinates =
                 super::get_position_untransformed(target.get_untracked().unwrap().as_ref());
             let (position, set_position) = APPLET.add_signal((start_coordinates.clone(), 0_f64));
@@ -1541,19 +1571,6 @@ mod note_recognition {
         '\u{2081}', '\u{2082}', '\u{2083}', '\u{2084}', '\u{2085}', '\u{2086}', '\u{2087}',
     ];
 
-    /// This function converts the input, a `u8` from 0 to 6, into a clickable note button using a `WriteSignal` to a list of `NoteButtonClone`s.
-    fn into_note_button(
-        note: u8,
-        set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
-    ) -> impl IntoView {
-        let target_ref = NodeRef::new();
-        let (attribute, interaction) = interact::interactive(move || {
-            add_clone(note, set_clone_list, target_ref);
-        });
-        add_triggers_to_interaction(note, interaction.set_is_active);
-        view! { <NoteButton note attribute target_ref /> }
-    }
-
     /// A macro for triggering actions based on keypresses.
     macro_rules! trigger {
         {
@@ -1580,7 +1597,7 @@ mod note_recognition {
     }
 
     /// Triggers `set_is_active` when the `TRIGGERS` are triggered.
-    fn add_triggers_to_interaction(note: u8, set_is_active: WriteSignal<bool>) {
+    fn add_triggers_to_interaction(note: NoteLetter, set_is_active: WriteSignal<bool>) {
         let (triggered, set_triggered) = APPLET.add_signal([false; TRIGGERS.len()]);
         trigger! {
             note
@@ -1594,7 +1611,7 @@ mod note_recognition {
 
     /// This function is called when a key is pressed.
     fn key_triggered<const IS_KEYPRESS: bool>(
-        note: u8,
+        note: NoteLetter,
         keyboard_event: &KeyboardEvent,
         triggered: ReadSignal<[bool; TRIGGERS.len()]>,
         set_triggered: WriteSignal<[bool; TRIGGERS.len()]>,
@@ -1613,7 +1630,7 @@ mod note_recognition {
 
     /// This function adds a `NoteButtonClone` for `note` to a list of `NoteButtonClone`s.
     fn add_clone(
-        note: u8,
+        note: NoteLetter,
         set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
         target: NodeRef<Button>,
     ) {
@@ -1624,8 +1641,8 @@ mod note_recognition {
 
     #[component]
     fn NoteButton(
-        /// The `u8` from 0 to 6 that describes the note.
-        note: u8,
+        /// The `NoteLetter` that describes the note.
+        note: NoteLetter,
         /// The attribute that describes how the note button is interactive.
         attribute: impl Attribute,
         /// The `NodeRef` that should represent the note button.
@@ -1674,6 +1691,12 @@ mod note_recognition {
         /// A `WriteSignal` to a list of `NoteButtonClone`s.
         set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
     ) -> impl IntoView {
-        view! { <div>{(0..7).map(|number| into_note_button(number, set_clone_list)).collect_view()}</div> }
+        view! {
+            <div>
+                {NoteLetter::iter()
+                    .map(|number| number.into_note_button(set_clone_list))
+                    .collect_view()}
+            </div>
+        }
     }
 }
