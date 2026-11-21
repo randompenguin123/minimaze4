@@ -1487,6 +1487,19 @@ mod note_recognition {
                 Self::G => "G\u{2087}",
             }
         }
+
+        /// Given a `NoteLetter`, this function returns the three trigger keycodes of a `KeyboardEvent` object that can trigger note buttons with that `NoteLetter`. The three triggers are a letter key, a digit key, and a numpad key.
+        const fn triggers(self) -> [&'static str; 3] {
+            match self {
+                Self::A => ["KeyA", "Digit1", "Numpad1"],
+                Self::B => ["KeyB", "Digit2", "Numpad2"],
+                Self::C => ["KeyC", "Digit3", "Numpad3"],
+                Self::D => ["KeyD", "Digit4", "Numpad4"],
+                Self::E => ["KeyE", "Digit5", "Numpad5"],
+                Self::F => ["KeyF", "Digit6", "Numpad6"],
+                Self::G => ["KeyG", "Digit7", "Numpad7"],
+            }
+        }
     }
 
     /// This struct describes a moving clone of a note button.
@@ -1624,8 +1637,8 @@ mod note_recognition {
         set_triggered: WriteSignal<[bool; TRIGGERS.len()]>,
         set_is_active: WriteSignal<bool>,
     ) {
-        for (i, trigger) in TRIGGERS.into_iter().enumerate() {
-            if keyboard_event.code() == trigger[note as usize] {
+        for (i, trigger) in note.triggers().into_iter().enumerate() {
+            if keyboard_event.code() == trigger {
                 set_triggered.update(|triggers| triggers[i] = IS_KEYPRESS);
                 break;
             }
