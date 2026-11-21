@@ -1580,17 +1580,6 @@ mod note_recognition {
         }
     }
 
-    /// The trigger keys that cause `NoteButtons` to be pressed.
-    const TRIGGERS: [[&str; 7]; 3] = [
-        ["KeyA", "KeyB", "KeyC", "KeyD", "KeyE", "KeyF", "KeyG"],
-        [
-            "Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7",
-        ],
-        [
-            "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7",
-        ],
-    ];
-
     /// A macro for triggering actions based on keypresses.
     macro_rules! trigger {
         {
@@ -1616,9 +1605,9 @@ mod note_recognition {
         };
     }
 
-    /// Triggers `set_is_active` when the `TRIGGERS` are triggered.
+    /// This function triggers `set_is_active` when the keycode triggers defined by `note.triggers()` are pressed.
     fn add_triggers_to_interaction(note: NoteLetter, set_is_active: WriteSignal<bool>) {
-        let (triggered, set_triggered) = APPLET.add_signal([false; TRIGGERS.len()]);
+        let (triggered, set_triggered) = APPLET.add_signal([false; 3]);
         trigger! {
             note
             triggered
@@ -1633,8 +1622,8 @@ mod note_recognition {
     fn key_triggered<const IS_KEYPRESS: bool>(
         note: NoteLetter,
         keyboard_event: &KeyboardEvent,
-        triggered: ReadSignal<[bool; TRIGGERS.len()]>,
-        set_triggered: WriteSignal<[bool; TRIGGERS.len()]>,
+        triggered: ReadSignal<[bool; 3]>,
+        set_triggered: WriteSignal<[bool; 3]>,
         set_is_active: WriteSignal<bool>,
     ) {
         for (i, trigger) in note.triggers().into_iter().enumerate() {
