@@ -1497,13 +1497,24 @@ mod note_recognition {
         ) -> impl IntoView {
             let target_ref = NodeRef::new();
             let (attribute, interaction) = interact::interactive(move || {
-                add_clone(self, set_clone_list, target_ref);
-                if self == note_index.get().letter() {
-                    set_note_index.update(NoteIndex::change);
-                }
+                self.note_button_clicked(set_clone_list, target_ref, note_index, set_note_index);
             });
             add_triggers_to_interaction(self, interaction.set_is_active);
             view! { <NoteButton note=self attribute target_ref /> }
+        }
+
+        /// This function is called when a note button is clicked. It creates a clone of the note button, then changes the `note_index` to another random value if the note button that was clicked matches `note_index`.
+        fn note_button_clicked(
+            self,
+            set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
+            target_ref: NodeRef<Button>,
+            note_index: ReadSignal<NoteIndex>,
+            set_note_index: WriteSignal<NoteIndex>,
+        ) {
+            if self == note_index.get().letter() {
+                set_note_index.update(NoteIndex::change);
+            }
+            add_clone(self, set_clone_list, target_ref);
         }
 
         /// The text that a note button of this `NoteLetter` would display. It consists of an uppercase letter followed by a number in subscript.
