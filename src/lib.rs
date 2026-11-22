@@ -1,3 +1,9 @@
+//! This is minimaze4, a web app containing lots of applets. It uses Rust, Leptos, and WebAssembly.
+//!
+//! # Links
+//!
+//! Visit minimaze4 via [Google sites](https://sites.google.com/view/minimaze4/h) or via [Cloudflare pages](minimaze.pages.dev).
+
 #![expect(clippy::empty_enums)]
 
 use derive_more::{Add, AddAssign};
@@ -32,7 +38,7 @@ fn main() {
     APPLET.set_applet(AppletView::Home);
     console_error_panic_hook::set_once();
     IS_TOUCHSCREEN.set(is_touchscreen()).unwrap();
-    leptos::mount::mount_to_body(move || {
+    mount_to_body(move || {
         view! {
             <style>{STYLE}</style>
             <main>
@@ -105,7 +111,7 @@ fn absolute_position() -> impl Attribute {
 /// A pair of two-dimensional coordinates.
 ///
 /// | coordinate | letter | increment effect | decrement effect |
-/// | ---------- | :----: | ---------------- | ---------------- |
+/// |------------|:------:|------------------|------------------|
 /// | first      | x      | move right       | move left        |
 /// | second     | y      | move down        | move up          |
 #[derive(Add, AddAssign, Clone, Default)]
@@ -150,8 +156,6 @@ fn get_position_untransformed(element: &HtmlElement) -> Coordinates {
 
 /// A module of utilities for interacting with elements through the pointer.
 mod interact {
-    extern crate alloc;
-
     use super::IS_TOUCHSCREEN;
     use super::handler::{APPLET, Handler};
     use leptos::attr::NextAttribute as _;
@@ -195,7 +199,7 @@ mod interact {
     /// This function creates and returns an `impl Attribute` and an `Interaction` object. It provides `ReadSignal`s for when a HTML element is hovered over, active, or disabled. It also changes the cursor accordingly:
     ///
     /// | interaction | cursor      |
-    /// | :---------: | :---------: |
+    /// |:-----------:|:-----------:|
     /// | hover       | pointer     |
     /// | disabled    | not-allowed |
     pub fn interaction<T: Handler, U: FnMut() + 'static>(
@@ -389,7 +393,7 @@ mod interact {
     /// This creates an `interaction` framework as an attribute.
     ///
     /// | interaction | effect                                                   |
-    /// | :---------: | -------------------------------------------------------- |
+    /// |:-----------:|----------------------------------------------------------|
     /// | hover       | The element gets 1.05 times larger with a box shadow.    |
     /// | active      | The element becomes 0.9 times brighter (it gets darker). |
     pub fn interactive(on_click: impl FnMut() + 'static) -> (impl Attribute, Interaction) {
@@ -774,7 +778,7 @@ mod home {
 
     impl AppletView {
         /// This function returns the `Applet View` as an `impl IntoView`.
-        fn view(self) -> impl IntoView + use<> {
+        fn view(self) -> impl IntoView {
             match self {
                 Self::Home => Box::new(
                     AppletWithIconButton::iter()
@@ -789,7 +793,7 @@ mod home {
 
     impl AppletWithIconButton {
         /// This function returns the `AppletWithIconButton`'s icon embedded inside the `background-image` of a `<button>`.
-        fn icon_button(self) -> impl IntoView + use<> {
+        fn icon_button(self) -> impl IntoView {
             let view = AppletView::Specified(self);
             view! {
                 <button
@@ -806,7 +810,7 @@ mod home {
         }
 
         /// This function returns the `AppletWithIconButton` as an `impl IntoView`.
-        fn view(self) -> impl IntoView + use<> {
+        fn view(self) -> impl IntoView {
             match self {
                 Self::NoteRecognition => note_recognition::App,
             }
@@ -904,7 +908,7 @@ mod home {
         /// This boolean represents whether or not the `<CornerFootnote>` will be located in the bottom right.
         ///
         /// | value of `is_on_right` | outcome                                  |
-        /// | :--------------------: | ---------------------------------------- |
+        /// |:----------------------:|------------------------------------------|
         /// | `true`                 | The element appears on the bottom right. |
         /// | `false`                | The element appears on the bottom left.  |
         is_on_right: bool,
@@ -943,6 +947,7 @@ mod note_recognition {
     use super::handler::Handler as _;
     use super::interact;
     use super::{APPLET, Coordinates, SVG};
+    use alloc::sync::Arc;
     use core::iter;
     use leptos::either::Either;
     use leptos::ev;
@@ -1511,10 +1516,23 @@ mod note_recognition {
             note_index: ReadSignal<NoteIndex>,
             set_note_index: WriteSignal<NoteIndex>,
         ) {
-            if self == note_index.get().letter() {
+            let correct = self == note_index.get().letter();
+            if correct {
                 set_note_index.update(NoteIndex::change);
             }
-            add_clone(self, set_clone_list, target_ref);
+            self.add_clone(correct, set_clone_list, target_ref);
+        }
+
+        /// This function adds a `NoteButtonClone` for a `NoteLetter` to a list of `NoteButtonClone`s.
+        fn add_clone(
+            self,
+            correct: bool,
+            set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
+            target: NodeRef<Button>,
+        ) {
+            set_clone_list.update(|slab| {
+                slab.insert(NoteButtonClone::new(self, correct, target));
+            });
         }
 
         /// The text that a note button of this `NoteLetter` would display. It consists of an uppercase letter followed by a number in subscript.
@@ -1544,6 +1562,47 @@ mod note_recognition {
         }
     }
 
+    /// This struct contains all of the information required to render a `NoteButtonClone` as HTML. It also contains information for setting the coordinates and rotation of the `NoteButtonClone`. A `CloneInfo` instance always sits inside an instance of `NoteButtonClone`.
+    struct CloneInfo {
+        /// This describes whether or not the `NoteButtonClone` is "correct". A "correct" `NoteButtonClone` has a green outline, while an "incorrect" `NoteButtonClone` has a red outline.
+        correct: bool,
+        /// A `ReadSignal` to the coordinates of the `NoteButtonClone`.
+        coordinates: ReadSignal<Coordinates>,
+        /// A `WriteSignal` to the coordinates of the `NoteButtonClone`.
+        set_coordinates: WriteSignal<Coordinates>,
+        /// A `ReadSignal` to the rotation in degrees clockwise of the `NoteButtonClone`.
+        rotation: ReadSignal<f64>,
+        /// A `WriteSignal` to the rotation in degrees clockwise of the `NoteButtonClone`.
+        set_rotation: WriteSignal<f64>,
+    }
+
+    impl CloneInfo {
+        /// Retrieves the distance to the left of the screen as pixels.
+        fn get_x_pixels(&self) -> f64 {
+            self.coordinates.get().0
+        }
+
+        /// Retrieves the distance to the top of the screen as pixels.
+        fn get_y_pixels(&self) -> f64 {
+            self.coordinates.get().1
+        }
+
+        /// Retrieves the rotation in degrees clockwise of the parent `NoteButtonClone`.
+        fn get_rotation_degrees(&self) -> f64 {
+            self.rotation.get()
+        }
+
+        /// Retrieves the color of the border.
+        ///
+        /// | `self.correct` | Border color | Hex    |
+        /// |:--------------:|:------------:|--------|
+        /// | `true`         | green        | `#3f3` |
+        /// | `false`        | red          | `#f33` |
+        const fn border_color(&self) -> &'static str {
+            if self.correct { "#33ff33" } else { "#ff3333" }
+        }
+    }
+
     /// This struct describes a moving clone of a note button.
     struct NoteButtonClone {
         /// The `NoteLetter` that describes the note.
@@ -1556,10 +1615,8 @@ mod note_recognition {
         start_coordinates: Coordinates,
         /// The `NoteButtonClone`'s angular momentum.
         angular_momentum: f64,
-        /// A `ReadSignal` to the coordinates of the note button.
-        position: ReadSignal<(Coordinates, f64)>,
-        /// A `WriteSignal` to the coordinates of the note button.
-        set_position: WriteSignal<(Coordinates, f64)>,
+        /// The `CloneInfo` of the `NoteButtonClone`. This contains all info that is needed to render the `NoteButtonClone` onscreen, such as coordinates and rotation.
+        clone_info: Arc<CloneInfo>,
     }
 
     impl NoteButtonClone {
@@ -1570,16 +1627,17 @@ mod note_recognition {
                     note=self.note
                     attribute=()
                     target_ref=NodeRef::new()
-                    position=self.position
+                    clone_info=Arc::clone(&self.clone_info)
                 />
             }
         }
 
-        /// Creates a new `NoteButtonCloneArc` from a note number and an HTML `Button` target.
-        fn new(note: NoteLetter, target: NodeRef<Button>) -> Self {
+        /// Creates a new `NoteButtonClone` based on the `NoteLetter`, whether it is correct, and a `NodeRef` to the `Button` itself.
+        fn new(note: NoteLetter, correct: bool, target: NodeRef<Button>) -> Self {
             let start_coordinates =
                 super::get_position_untransformed(target.get_untracked().unwrap().as_ref());
-            let (position, set_position) = APPLET.add_signal((start_coordinates.clone(), 0_f64));
+            let (coordinates, set_coordinates) = APPLET.add_signal(start_coordinates.clone());
+            let (rotation, set_rotation) = APPLET.add_signal(0_f64);
             let (start_time, set_start_time) = APPLET.add_signal(None);
             Self {
                 note,
@@ -1587,8 +1645,13 @@ mod note_recognition {
                 set_start_time,
                 start_coordinates,
                 angular_momentum: rand::random_range(-0.5..0.5),
-                position,
-                set_position,
+                clone_info: Arc::new(CloneInfo {
+                    correct,
+                    coordinates,
+                    set_coordinates,
+                    rotation,
+                    set_rotation,
+                }),
             }
         }
 
@@ -1596,18 +1659,18 @@ mod note_recognition {
         fn animate(&self, time: f64) -> bool {
             let window_size = super::window_size();
             let elapsed_time = self.get_elapsed_time(time);
-            let new_position = (
-                Coordinates(
-                    self.start_coordinates.0,
-                    elapsed_time
-                        .powi(2)
-                        .mul_add(0.0006, self.start_coordinates.1),
-                ),
-                elapsed_time * self.angular_momentum,
+            let new_coordinates = Coordinates(
+                self.start_coordinates.0,
+                elapsed_time
+                    .powi(2)
+                    .mul_add(0.0006, self.start_coordinates.1),
             );
-            self.set_position.set(new_position.clone());
-            !((-window_size.0..window_size.0 * 2_f64).contains(&new_position.0.0)
-                && (-window_size.1..window_size.1 * 2_f64).contains(&new_position.0.1))
+            self.clone_info.set_coordinates.set(new_coordinates.clone());
+            self.clone_info
+                .set_rotation
+                .set(elapsed_time * self.angular_momentum);
+            !((-window_size.0..window_size.0 * 2_f64).contains(&new_coordinates.0)
+                && (-window_size.1..window_size.1 * 2_f64).contains(&new_coordinates.1))
         }
 
         /// Gets the current elapsed time using the `current_time` as an `f64`. This function takes into account `self`'s `set_start_time` field.
@@ -1679,17 +1742,6 @@ mod note_recognition {
         }
     }
 
-    /// This function adds a `NoteButtonClone` for `note` to a list of `NoteButtonClone`s.
-    fn add_clone(
-        note: NoteLetter,
-        set_clone_list: WriteSignal<Slab<NoteButtonClone>>,
-        target: NodeRef<Button>,
-    ) {
-        set_clone_list.update(|slab| {
-            slab.insert(NoteButtonClone::new(note, target));
-        });
-    }
-
     #[component]
     fn NoteButton(
         /// The `NoteLetter` that describes the note.
@@ -1700,19 +1752,29 @@ mod note_recognition {
         target_ref: NodeRef<Button>,
         /// The position and rotation of the note button.
         #[prop(optional)]
-        position: Option<ReadSignal<(Coordinates, f64)>>,
+        clone_info: Option<Arc<CloneInfo>>,
     ) -> impl IntoView {
         let letter_number = note.display_text();
-        let position_attribute = position.map_or(Either::Left(()), |position| {
+        let position_attribute = clone_info.map_or(Either::Left(()), |clone_info| {
             Either::Right(view! {
                 <{..}
                     style:margin="0"
                     style:position="fixed"
-                    style:left=move || format!("{}px", position.get().0.0)
-                    style:top=move || format!("{}px", position.get().0.1)
+                    style:left={
+                        let clone_info = Arc::clone(&clone_info);
+                        move || format!("{}px", clone_info.get_x_pixels())
+                    }
+                    style:top={
+                        let clone_info = Arc::clone(&clone_info);
+                        move || format!("{}px", clone_info.get_y_pixels())
+                    }
                     style:transition="none"
-                    style:rotate=move || format!("{}deg", position.get().1)
+                    style:rotate={
+                        let clone_info = Arc::clone(&clone_info);
+                        move || format!("{}deg", clone_info.get_rotation_degrees())
+                    }
                     style:pointer-events="none"
+                    style:border-color=clone_info.border_color()
                 />
             })
         });

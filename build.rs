@@ -1,3 +1,9 @@
+//! This is minimaze4, a web app containing lots of applets. It uses Rust, Leptos, and WebAssembly.
+//!
+//! # Links
+//!
+//! Visit minimaze4 via [Google sites](https://sites.google.com/view/minimaze4/h) or via [Cloudflare pages](minimaze.pages.dev).
+
 use std::fs;
 use std::path::PathBuf;
 
