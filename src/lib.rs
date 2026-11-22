@@ -1601,6 +1601,12 @@ mod note_recognition {
         const fn border_color(&self) -> &'static str {
             if self.correct { "#33ff33" } else { "#ff3333" }
         }
+
+        /// Sets the position to be at the coordinates `coordinates` with rotation as `rotation` degrees clockwise.
+        fn set_position(&self, coordinates: Coordinates, rotation: f64) {
+            self.set_coordinates.set(coordinates);
+            self.set_rotation.set(rotation);
+        }
     }
 
     /// This struct describes a moving clone of a note button.
@@ -1665,10 +1671,10 @@ mod note_recognition {
                     .powi(2)
                     .mul_add(0.0006, self.start_coordinates.1),
             );
-            self.clone_info.set_coordinates.set(new_coordinates.clone());
-            self.clone_info
-                .set_rotation
-                .set(elapsed_time * self.angular_momentum);
+            self.clone_info.set_position(
+                new_coordinates.clone(),
+                elapsed_time * self.angular_momentum,
+            );
             !((-window_size.0..window_size.0 * 2_f64).contains(&new_coordinates.0)
                 && (-window_size.1..window_size.1 * 2_f64).contains(&new_coordinates.1))
         }
@@ -1756,23 +1762,19 @@ mod note_recognition {
     ) -> impl IntoView {
         let letter_number = note.display_text();
         let position_attribute = clone_info.map_or(Either::Left(()), |clone_info| {
+            let clone_infos = (
+                Arc::clone(&clone_info),
+                Arc::clone(&clone_info),
+                Arc::clone(&clone_info),
+            );
             Either::Right(view! {
                 <{..}
                     style:margin="0"
                     style:position="fixed"
-                    style:left={
-                        let clone_info = Arc::clone(&clone_info);
-                        move || format!("{}px", clone_info.get_x_pixels())
-                    }
-                    style:top={
-                        let clone_info = Arc::clone(&clone_info);
-                        move || format!("{}px", clone_info.get_y_pixels())
-                    }
+                    style:left=move || format!("{}px", clone_infos.0.get_x_pixels())
+                    style:top=move || format!("{}px", clone_infos.1.get_y_pixels())
                     style:transition="none"
-                    style:rotate={
-                        let clone_info = Arc::clone(&clone_info);
-                        move || format!("{}deg", clone_info.get_rotation_degrees())
-                    }
+                    style:rotate=move || format!("{}deg", clone_infos.2.get_rotation_degrees())
                     style:pointer-events="none"
                     style:border-color=clone_info.border_color()
                 />
