@@ -1594,12 +1594,12 @@ mod note_recognition {
 
         /// Retrieves the color of the border.
         ///
-        /// | `self.correct` | Border color | Hex    |
-        /// |:--------------:|:------------:|--------|
-        /// | `true`         | green        | `#3f3` |
-        /// | `false`        | red          | `#f33` |
+        /// | `self.correct` | Border color | Hex       |
+        /// |:--------------:|:------------:|-----------|
+        /// | `true`         | green        | `#00cd00` |
+        /// | `false`        | red          | `#ff4c45` |
         const fn border_color(&self) -> &'static str {
-            if self.correct { "#33ff33" } else { "#ff3333" }
+            if self.correct { "#00cd00" } else { "#ff4c45" }
         }
 
         /// Sets the position to be at the coordinates `coordinates` with rotation as `rotation` degrees clockwise.
