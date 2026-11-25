@@ -1,0 +1,3 @@
+style_edition = "2024"
+hex_literal_case = "Lower"
+use_try_shorthand = true

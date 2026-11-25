@@ -4,7 +4,10 @@
 //!
 //! Visit minimaze4 via [Google sites](https://sites.google.com/view/minimaze4/h) or via [Cloudflare pages](minimaze.pages.dev).
 
-#![expect(clippy::empty_enums)]
+#![expect(
+    clippy::empty_enums,
+    reason = "Leptos creates empty enums in its macros that cannot be allowed individually"
+)]
 
 use derive_more::{Add, AddAssign};
 use handler::APPLET;
